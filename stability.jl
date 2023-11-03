@@ -7,28 +7,62 @@ using InteractiveUtils
 # ╔═╡ ce56ba82-79e8-11ee-1b30-272520e58195
 begin
 	using Plots
+	using SpecialFunctions
+	using LaTeXStrings
+	using Trapz
 	using PlutoUI
 	TableOfContents()
 end
 
 # ╔═╡ 6009f94c-6eb6-400f-8f73-f0433e82e42d
-md"# Stability of a Ferrofluid Jet"
+md"## Stability of a Ferrofluid Jet"
 
 # ╔═╡ 042be35a-81e4-45ca-b1cf-2023be8092bb
-md"## Equilibrium Jet"
+md"### Equilibrium Jet
+
+First consider the stability of a the ferrofluid jet at equilibrium $S(z) = 1$."
 
 # ╔═╡ cc94cd11-da4f-4e31-800c-3053d7bfb2fd
-md"## "
+md"##### Analytically
+
+The eigenvalues of the spectral problem for the equilibrium case are given by:
+
+$$\lambda_{\mu + m} = ic(\mu + m) \pm ic_0 (\mu + m)$$ 
+
+where "
+
+# ╔═╡ 5fe20173-ce5d-4cbd-860d-f36833c1fdeb
+
+
+# ╔═╡ 7a13978f-9f3d-4206-8262-3a8929dbe957
+md"##### Numerically
+
+We can also solve the problem numerically and see if we get the same results"
+
+# ╔═╡ eda75fa2-e051-44a5-9cb7-c041ffd322ef
+
+
+# ╔═╡ 9196cc07-f410-4843-8a4c-5c716f36fa4b
+md"### Generalized Eigenvalue Problem"
+
+# ╔═╡ bb883c2d-8049-414f-adfe-919bacc1b6a9
+
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
+LaTeXStrings = "b964fa9f-0449-5b57-a5c2-d3ea65f4040f"
 Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
 PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
+SpecialFunctions = "276daf66-3868-5448-9aa4-cd146d93841b"
+Trapz = "592b5752-818d-11e9-1e9a-2b8ca4a44cd1"
 
 [compat]
+LaTeXStrings = "~1.3.1"
 Plots = "~1.39.0"
 PlutoUI = "~0.7.52"
+SpecialFunctions = "~2.3.1"
+Trapz = "~2.0.3"
 """
 
 # ╔═╡ 00000000-0000-0000-0000-000000000002
@@ -536,6 +570,12 @@ git-tree-sha1 = "a12e56c72edee3ce6b96667745e6cbbe5498f200"
 uuid = "458c3c95-2e84-50aa-8efc-19380b2a3a95"
 version = "1.1.23+0"
 
+[[deps.OpenSpecFun_jll]]
+deps = ["Artifacts", "CompilerSupportLibraries_jll", "JLLWrappers", "Libdl", "Pkg"]
+git-tree-sha1 = "13652491f6856acfd2db29360e1bbcd4565d04f1"
+uuid = "efe28fd5-8261-553b-a9e1-b2916fc3738e"
+version = "0.5.5+0"
+
 [[deps.Opus_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
 git-tree-sha1 = "51a08fb14ec28da2ec7a927c4337e4332c2a4720"
@@ -691,6 +731,12 @@ version = "1.2.0"
 deps = ["LinearAlgebra", "Random"]
 uuid = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
 
+[[deps.SpecialFunctions]]
+deps = ["ChainRulesCore", "IrrationalConstants", "LogExpFunctions", "OpenLibm_jll", "OpenSpecFun_jll"]
+git-tree-sha1 = "e2cfc4012a19088254b3950b85c3c1d8882d864d"
+uuid = "276daf66-3868-5448-9aa4-cd146d93841b"
+version = "2.3.1"
+
 [[deps.Statistics]]
 deps = ["LinearAlgebra", "SparseArrays"]
 uuid = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
@@ -730,6 +776,11 @@ deps = ["Random", "Test"]
 git-tree-sha1 = "49cbf7c74fafaed4c529d47d48c8f7da6a19eb75"
 uuid = "3bb67fe8-82b1-5028-8e26-92a6c54297fa"
 version = "0.10.1"
+
+[[deps.Trapz]]
+git-tree-sha1 = "79eb0ed763084a3e7de81fe1838379ac6a23b6a0"
+uuid = "592b5752-818d-11e9-1e9a-2b8ca4a44cd1"
+version = "2.0.3"
 
 [[deps.Tricks]]
 git-tree-sha1 = "eae1bb484cd63b36999ee58be2de6c178105112f"
@@ -1062,6 +1113,11 @@ version = "1.4.1+1"
 # ╠═ce56ba82-79e8-11ee-1b30-272520e58195
 # ╟─6009f94c-6eb6-400f-8f73-f0433e82e42d
 # ╟─042be35a-81e4-45ca-b1cf-2023be8092bb
-# ╠═cc94cd11-da4f-4e31-800c-3053d7bfb2fd
+# ╟─cc94cd11-da4f-4e31-800c-3053d7bfb2fd
+# ╠═5fe20173-ce5d-4cbd-860d-f36833c1fdeb
+# ╟─7a13978f-9f3d-4206-8262-3a8929dbe957
+# ╠═eda75fa2-e051-44a5-9cb7-c041ffd322ef
+# ╟─9196cc07-f410-4843-8a4c-5c716f36fa4b
+# ╠═bb883c2d-8049-414f-adfe-919bacc1b6a9
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
