@@ -4,6 +4,16 @@
 using Markdown
 using InteractiveUtils
 
+# This Pluto notebook uses @bind for interactivity. When running this notebook outside of Pluto, the following 'mock version' of @bind gives bound variables a default value (instead of an error).
+macro bind(def, element)
+    quote
+        local iv = try Base.loaded_modules[Base.PkgId(Base.UUID("6e696c72-6542-2067-7265-42206c756150"), "AbstractPlutoDingetjes")].Bonds.initial_value catch; b -> missing; end
+        local el = $(esc(element))
+        global $(esc(def)) = Core.applicable(Base.get, el) ? Base.get(el) : iv(el)
+        el
+    end
+end
+
 # ╔═╡ ce56ba82-79e8-11ee-1b30-272520e58195
 begin
 	using Plots
@@ -16,6 +26,39 @@ end
 
 # ╔═╡ 6009f94c-6eb6-400f-8f73-f0433e82e42d
 md"## Stability of a Ferrofluid Jet"
+
+# ╔═╡ 8eeaba0e-8d13-4dea-9534-b45c53e9847f
+md"First define constants common to all problems, and a few helper functions."
+
+# ╔═╡ 1e018b6a-6e6f-470d-8e41-deaa52570d7f
+function β(n, k, b, S0)
+
+	beta1 = besseli.(1, k*b) .* besselk.(n, k.*S0)
+	beta2 = (-1)^n .* besselk.(1, k*b) .* besseli.(n, k.*S0)
+
+	return beta1 + beta2
+end
+
+# ╔═╡ 48249892-d7de-4048-88bb-dcd93e81da62
+function speed0(k, b, B)
+	# wave speed for small amplitude waves, depending on the wave-number k
+	
+	c0 = sqrt.((-β(1,k,b,1) ./ β(0,k,b,1)) .* (k.^2 .- 1 .+ B))
+
+	return c0
+	
+end
+
+# ╔═╡ d60a4f84-af0b-48ff-95ff-5ddaef40c034
+begin
+
+	B = 1.5
+	b = 0.1
+	E = 1 - B/2
+
+	c0 = speed0(1, b, B) # wave speed at k = 1
+	
+end
 
 # ╔═╡ 042be35a-81e4-45ca-b1cf-2023be8092bb
 md"### Equilibrium Jet
@@ -31,8 +74,31 @@ $$\lambda_{\mu + m} = ic(\mu + m) \pm ic_0 (\mu + m)$$
 
 where "
 
-# ╔═╡ 5fe20173-ce5d-4cbd-860d-f36833c1fdeb
+# ╔═╡ e3a9db1c-3387-4a39-9c97-c5a44c7f576a
+md"m = $(@bind m PlutoUI.Slider(1:100, show_value = true, default=1))"
 
+# ╔═╡ 5fe20173-ce5d-4cbd-860d-f36833c1fdeb
+begin
+	μ = collect(range(0,1.0,100))
+
+	λ1 = im .* c0 .* (μ .+ m) .+ im .* c0 .* (μ .+ m)
+	λ2 = im .* c0 .* (μ .+ m) .- im .* c0 .* (μ .+ m)
+	
+end
+
+# ╔═╡ a0401fc6-9ddd-4bdc-98b9-a1543bc010fa
+begin
+	scatter(real(λ1),imag(λ1))
+	scatter!(real(λ2),imag(λ2))
+
+	xlabel!(L"Re\{\lambda\}")
+	ylabel!(L"Im\{\lambda\}")
+
+	xlims!(-0.5,0.5)
+	ylims!(-0.5,7)
+
+	# scatter(λ1)
+end
 
 # ╔═╡ 7a13978f-9f3d-4206-8262-3a8929dbe957
 md"##### Numerically
@@ -44,6 +110,9 @@ We can also solve the problem numerically and see if we get the same results"
 
 # ╔═╡ 9196cc07-f410-4843-8a4c-5c716f36fa4b
 md"### Generalized Eigenvalue Problem"
+
+# ╔═╡ 1b148894-7680-4f9e-b489-eec0d89db4a5
+md"Import numerical solution data:"
 
 # ╔═╡ bb883c2d-8049-414f-adfe-919bacc1b6a9
 
@@ -1112,12 +1181,19 @@ version = "1.4.1+1"
 # ╔═╡ Cell order:
 # ╠═ce56ba82-79e8-11ee-1b30-272520e58195
 # ╟─6009f94c-6eb6-400f-8f73-f0433e82e42d
+# ╟─8eeaba0e-8d13-4dea-9534-b45c53e9847f
+# ╠═d60a4f84-af0b-48ff-95ff-5ddaef40c034
+# ╟─48249892-d7de-4048-88bb-dcd93e81da62
+# ╟─1e018b6a-6e6f-470d-8e41-deaa52570d7f
 # ╟─042be35a-81e4-45ca-b1cf-2023be8092bb
 # ╟─cc94cd11-da4f-4e31-800c-3053d7bfb2fd
 # ╠═5fe20173-ce5d-4cbd-860d-f36833c1fdeb
+# ╟─e3a9db1c-3387-4a39-9c97-c5a44c7f576a
+# ╠═a0401fc6-9ddd-4bdc-98b9-a1543bc010fa
 # ╟─7a13978f-9f3d-4206-8262-3a8929dbe957
 # ╠═eda75fa2-e051-44a5-9cb7-c041ffd322ef
 # ╟─9196cc07-f410-4843-8a4c-5c716f36fa4b
+# ╟─1b148894-7680-4f9e-b489-eec0d89db4a5
 # ╠═bb883c2d-8049-414f-adfe-919bacc1b6a9
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
