@@ -17,6 +17,7 @@ end
 # ╔═╡ ce56ba82-79e8-11ee-1b30-272520e58195
 begin
 	using Plots
+	using LinearAlgebra
 	using SpecialFunctions
 	using LaTeXStrings
 	using Trapz
@@ -52,11 +53,11 @@ end
 # ╔═╡ d60a4f84-af0b-48ff-95ff-5ddaef40c034
 begin
 
-	B = 1.5
+	Bond = 1.5
 	b = 0.1
-	E = 1 - B/2
+	ϵ = 1 - Bond/2
 
-	c0 = speed0(1, b, B) # wave speed at k = 1
+	c0 = speed0(1, b, Bond) # wave speed at k = 1
 	
 end
 
@@ -79,7 +80,7 @@ md"m = $(@bind m PlutoUI.Slider(1:100, show_value = true, default=1))"
 
 # ╔═╡ 5fe20173-ce5d-4cbd-860d-f36833c1fdeb
 begin
-	μ = collect(range(0,1.0,100))
+	μ = collect(range(0.001,1.0,100))
 
 	λ1 = im .* c0 .* (μ .+ m) .+ im .* c0 .* (μ .+ m)
 	λ2 = im .* c0 .* (μ .+ m) .- im .* c0 .* (μ .+ m)
@@ -88,8 +89,8 @@ end
 
 # ╔═╡ a0401fc6-9ddd-4bdc-98b9-a1543bc010fa
 begin
-	scatter(real(λ1),imag(λ1))
-	scatter!(real(λ2),imag(λ2))
+	scatter(real(λ1),imag(λ1), label=L"\lambda_+")
+	scatter!(real(λ2),imag(λ2), label=L"\lambda_-")
 
 	xlabel!(L"Re\{\lambda\}")
 	ylabel!(L"Im\{\lambda\}")
@@ -117,10 +118,335 @@ md"Import numerical solution data:"
 # ╔═╡ bb883c2d-8049-414f-adfe-919bacc1b6a9
 
 
+# ╔═╡ 458b05b7-5655-415d-a9bf-f64d157ac891
+begin
+	z = collect(range(-π,+π,100))
+
+	S0 = 0.0001 .* cos.(z) .+ 1
+	S0z = zeros(length(z))
+	S0zz = zeros(length(z))
+
+	S0sq = 1 .+ S0z.^2
+
+	scatter(z,S0)
+	# scatter!(z,S0z)
+end
+
+# ╔═╡ 70f948f9-e526-47c3-98c9-d745493a5e18
+begin
+	c = c0
+	N = 2
+	# q0z = c0 + c0
+
+	κ = - (S0zz./(S0sq.^(3/2))) .+ (1 ./ (S0.*S0sq.^(1/2)))
+	q0z = c .+ (1 ./ S0) .* sqrt.(S0sq .* ( (c^2 + 2 .* ϵ .- 2 .* κ).*(S0.^2) .+ Bond))
+end
+
+# ╔═╡ d2eeccbe-1f59-4e5e-9e64-342a38b8f477
+md"##### Matrix definitions"
+
+# ╔═╡ 191f060d-4302-4b18-82f8-6e20224ee201
+md"###### Local 
+
+In this case, $j = - m$ so we only iterate over the $m$ index and the matrices are left-right flipped diagonal."
+
+# ╔═╡ 9bc57aaf-5cba-4569-975c-a504730b8008
+function Ag(N, z, S0z, q0z, c)
+
+	# initialize matrix
+	A = zeros(2*N+1, 2*N+1) .+ 0.0im
+	
+	# constants
+	α = 1 ./ (1 .+ S0z.^2)
+	f = S0z .* (q0z .- c) .* α
+
+	# populate matrix
+	for mm = 1:(2*N + 1)
+
+		# working with both code and matrix indicies
+		m = mm
+		j = m
+		jj = j
+
+		# define integrand specifc to matrix
+		term = f
+		
+		# populate matrix entries
+		A[jj,mm] =  1/(2*π) .* trapz(z,term .* exp.(- im .* j .* z))
+
+	end
+
+	return A 
+	
+end
+
+# ╔═╡ 4ee55b92-512b-431e-9973-d0c283aa13d2
+Ag(N, z, S0z, q0z, c0)
+
+# ╔═╡ 8d7afa78-57ae-4fb9-8899-4254f22a11f8
+function Bg(N, z)
+
+	# initialize matrix
+	B = zeros(2*N+1, 2*N+1) .+ 0.0im
+
+	# loop over index to populate matrix
+	for mm = 1:(2*N + 1)
+
+		# working with both code and matrix indicies
+		m = mm
+		
+		j = -m
+		jj = -j + 2*N - 2*(mm-1)
+
+		# define integrand specifc to matrix
+		term = -1
+		
+		# populate matrix entries
+		B[jj,mm] =  1/(2*π) .* trapz(z,term .* exp.(- im .* j .* z))
+
+	end
+	
+
+	return B
+end
+
+# ╔═╡ 1eabaff3-9776-4280-a4dc-5686441544f4
+Bg(N, z)
+
+# ╔═╡ c2ec1e3a-7ed5-43de-867a-bfa2f25de5af
+function Eg(N, z, S0, S0z, S0zz, q0z, c, B, μ)
+
+	# initialize matrix
+	E = zeros(2*N+1, 2*N+1) .+ 0.0im
+	
+	# constants
+	α = 1 ./ (1 .+ S0z.^2)
+	f = S0z .* (q0z .- c) .* α
+	γ = c .- q0z .+ f.*S0z
+
+	# loop over index to populate matrix
+	for mm = 1:(2*N + 1)
+
+		# working with both code and matrix indicies
+		m = mm
+		
+		j = -m
+		jj = -j + 2*N - 2*(mm-1)
+
+		# define integrand specifc to matrix
+		term = ( γ.*f .+ 3 .*S0zz.*S0z.*(α.^(5/2)) .- ((α.^(3/2)) ./ S0) .* S0z .- (α.^(3/2)) .* im .* (μ .+ m) ) .* (im.*(μ .+ m)) .- (α.^(1/2)) ./ S0.^2 .+ B ./ S0.^3
+		
+		# populate matrix entries
+		E[jj,mm] =  1/(2*π) .* trapz(z,term .* exp.(- im .* j .* z))
+
+	end
+
+	return E
+end
+
+# ╔═╡ ce187832-a000-4d42-bdfd-da238e644f59
+Eg(N, z, S0, S0z, S0zz, q0z, c0, Bond, μ)
+
+# ╔═╡ 0b757a49-b1a3-4d6d-b482-fe7adce2c499
+function Fg(N, z, S0, S0z, q0z, c, μ)
+
+	# initialize matrix
+	F = zeros(2*N+1, 2*N+1) .+ 0.0im
+	
+	# constants
+	α = 1 ./ (1 .+ S0z.^2)
+	f = S0z .* (q0z .- c) .* α
+	γ = c .- q0z .+ f.*S0z
+
+	# loop over index to populate matrix
+	for mm = 1:(2*N + 1)
+
+		# working with both code and matrix indicies
+		m = mm
+		
+		j = -m
+		jj = -j + 2*N - 2*(mm-1)
+
+		# define integrand specifc to matrix
+		term = - γ .* im .* (μ .+ m)
+		
+		# populate matrix entries
+		F[jj,mm] =  1/(2*π) .* round(trapz(z,term .* exp.(- im .* j .* z)))
+
+	end
+	
+
+	return F
+end
+
+# ╔═╡ 73828383-6b1f-4f8b-ab22-b2c5e1f581a0
+Fg(N, z, S0, S0z, q0z, c0, μ)
+
+# ╔═╡ b676b7ee-9d47-41dd-a80d-60fa8556a38e
+md"###### Non-local
+
+In this case, $j$ is a ''free'' index, so we iterate over both $j$ and $m$."
+
+# ╔═╡ 9c6745e6-0757-43f4-89da-ae6b04b1803c
+function Cg(N, z, S0, b, μ)
+
+	# initialize matrix
+	C = zeros(2*N+1, 2*N+1) .+ 0.0im
+
+	for mm = 1:(2*N + 1)
+
+		# converting from code to matrix index
+		m = mm 
+
+		for jj = 1:(2*N + 1)
+
+			j = jj 
+
+			k = m .+ μ
+
+			β0 = β(0, k, b, S0)
+			β1 = β(1, k, b, S0)
+
+			# define integrand specifc to matrix
+			term = - k .* S0 .* β0
+			
+			# populate matrix entries
+			C[jj,mm] =  1/(2*π) .* round(trapz(z,term .* exp.(- im .* j .* z)))
+		
+		end
+	end
+
+	return C
+	
+end
+
+# ╔═╡ 39d542a2-0ecb-4ed0-b0cf-4eca6bd67094
+Cg(N, z, S0, b, μ)
+
+# ╔═╡ c75a4af4-ec70-41ae-848b-0d4464047936
+function Gg(N, z, S0, b, c, μ)
+
+	# initialize matrix
+	G = zeros(2*N+1, 2*N+1) .+ 0.0im
+
+	for mm = 1:(2*N + 1)
+
+		# converting from code to matrix index
+		m = mm 
+
+		for jj = 1:(2*N + 1)
+
+			j = jj 
+
+			k = μ .+ m
+
+			β0 = β(0, k, b, S0)
+			β1 = β(1, k, b, S0)
+
+			# define integrand specifc to matrix
+			term = S0.*S0z.*c .* k.^2 .* β1 .- S0z.*c.*k.*β0 .+ im.*S0.*q0z.* k.^2 .* β0 .- im.*S0.*c.* k.^2 .* β0
+			
+			# populate matrix entries
+			G[jj,mm] =  1/(2*π) .* round(trapz(z,term .* exp.(- im .* j .* z)))
+		
+		end
+	end
+
+	return G
+	
+end
+
+# ╔═╡ 8c00452c-2585-4edc-9ed6-b5befaa7991d
+Gg(N, z, S0, b, c0, μ)
+
+# ╔═╡ b586cc56-cef0-4a0a-b31d-b7a9b37ecffa
+function Hg(N, z, S0, b, μ)
+
+	# initialize matrix
+	H = zeros(2*N+1, 2*N+1) .+ 0.0im
+
+	for mm = 1:(2*N + 1)
+
+		# converting from code to matrix index
+		m = mm
+
+		for jj = 1:(2*N + 1)
+
+			j = jj 
+
+			k = μ .+ m
+
+			β0 = β(0, k, b, S0)
+			β1 = β(1, k, b, S0)
+
+			# define integrand specifc to matrix
+			term = S0 .* k.^2 .* β1
+			
+			# populate matrix entries
+			H[jj,mm] =  1/(2*π) .* round(trapz(z,term .* exp.(- im .* j .* z)))
+		
+		end
+	end
+
+	return H
+	
+end
+
+# ╔═╡ 50917e2b-48b0-41cb-95cd-a2d7b3a8bf7b
+begin
+
+	# A = zeros(ComplexF64, length(2N+1))
+	# B = zeros(length(2N+1))
+	# C = zeros(length(2N+1))
+	# E = zeros(length(2N+1))
+	# F = zeros(length(2N+1))
+	# G = zeros(length(2N+1))
+	# H = zeros(length(2N+1))
+
+	# solutions = zeros(length[μ])
+
+	λ = zeros(ComplexF64, length(μ))
+	
+for i = 1:length(μ)
+
+	# create matrices
+	A = Ag(N, z, S0z, q0z, c0)
+	B = Bg(N, z)
+	E = Eg(N, z, S0, S0z, S0zz, q0z, c0, Bond, μ[i])
+	F = Fg(N, z, S0, S0z, q0z, c0, μ[i])
+
+	C = Cg(N, z, S0, b, μ[i])
+	D = zeros(2N+1,2N+1)
+	G = Gg(N, z, S0, b, c0, μ[i])
+	H = Hg(N, z, S0, b, μ[i])
+
+	lhs = [A B; C D]
+    rhs = [E F; G H]
+	
+	# solve problem 
+	solutions = eigen(lhs, rhs)
+	
+	# save solution
+	λ[i] = (solutions.values)[5]
+
+	
+end
+end
+
+# ╔═╡ 43165603-47c4-4107-8c7a-6bd4f056939c
+scatter(λ)
+
+# ╔═╡ a99205c8-6b2f-4a65-b268-8878dac500c5
+length(λ)
+
+# ╔═╡ 7bc4c8dc-0134-47fd-bc6a-18fbe81aff82
+Hg(N, z, S0, b, μ)
+
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
 LaTeXStrings = "b964fa9f-0449-5b57-a5c2-d3ea65f4040f"
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
 PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
 SpecialFunctions = "276daf66-3868-5448-9aa4-cd146d93841b"
@@ -1195,5 +1521,27 @@ version = "1.4.1+1"
 # ╟─9196cc07-f410-4843-8a4c-5c716f36fa4b
 # ╟─1b148894-7680-4f9e-b489-eec0d89db4a5
 # ╠═bb883c2d-8049-414f-adfe-919bacc1b6a9
+# ╠═458b05b7-5655-415d-a9bf-f64d157ac891
+# ╠═70f948f9-e526-47c3-98c9-d745493a5e18
+# ╠═50917e2b-48b0-41cb-95cd-a2d7b3a8bf7b
+# ╠═43165603-47c4-4107-8c7a-6bd4f056939c
+# ╠═a99205c8-6b2f-4a65-b268-8878dac500c5
+# ╟─d2eeccbe-1f59-4e5e-9e64-342a38b8f477
+# ╟─191f060d-4302-4b18-82f8-6e20224ee201
+# ╟─9bc57aaf-5cba-4569-975c-a504730b8008
+# ╠═4ee55b92-512b-431e-9973-d0c283aa13d2
+# ╟─8d7afa78-57ae-4fb9-8899-4254f22a11f8
+# ╠═1eabaff3-9776-4280-a4dc-5686441544f4
+# ╟─c2ec1e3a-7ed5-43de-867a-bfa2f25de5af
+# ╠═ce187832-a000-4d42-bdfd-da238e644f59
+# ╟─0b757a49-b1a3-4d6d-b482-fe7adce2c499
+# ╠═73828383-6b1f-4f8b-ab22-b2c5e1f581a0
+# ╟─b676b7ee-9d47-41dd-a80d-60fa8556a38e
+# ╟─9c6745e6-0757-43f4-89da-ae6b04b1803c
+# ╠═39d542a2-0ecb-4ed0-b0cf-4eca6bd67094
+# ╟─c75a4af4-ec70-41ae-848b-0d4464047936
+# ╠═8c00452c-2585-4edc-9ed6-b5befaa7991d
+# ╟─b586cc56-cef0-4a0a-b31d-b7a9b37ecffa
+# ╠═7bc4c8dc-0134-47fd-bc6a-18fbe81aff82
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
