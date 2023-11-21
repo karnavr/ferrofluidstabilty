@@ -70,7 +70,7 @@ end
 # ╔═╡ 9dd85ed3-ba41-4cde-abba-1a045286dc3c
 begin
 	initial_guess = (1e-10).*ones(branchPoints+1, N+2)
-	initial_guess[1,1:5] = [c0other, 1.0, a1_vals[1], 0.1, 1e-10]
+	initial_guess[1,1:5] = [c0other, 10.0, a1_vals[1], 0.1, 1e-10]
 end
 
 # ╔═╡ 22f3e72d-9bf0-4b38-80a0-e0fb526be387

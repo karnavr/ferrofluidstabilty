@@ -42,7 +42,7 @@ function β(n, k, b, S0)
 end
 
 # ╔═╡ 48249892-d7de-4048-88bb-dcd93e81da62
-function speed0(k, b, B)
+function c0(k, b, B)
 	# wave speed for small amplitude waves, depending on the wave-number k
 	
 	c0 = sqrt.((-β(1,k,b,1) ./ β(0,k,b,1)) .* (k.^2 .- 1 .+ B))
@@ -58,7 +58,7 @@ begin
 	b = 0.1
 	ϵ = 1 - Bond/2
 
-	c1 = speed0(1, b, Bond) # wave speed at k = 1
+	c1 = c0(1, b, Bond) # wave speed at k = 1
 	
 end
 
@@ -97,8 +97,8 @@ md"m = $(@bind m PlutoUI.Slider(1:100, show_value = true, default=1))"
 begin
 	μ = collect(range(0.001,1.0,100))
 
-	λ1 = im .* c1 .* (μ .+ m) .+ im .* c1 .* (μ .+ m)
-	λ2 = im .* c1 .* (μ .+ m) .- im .* c1 .* (μ .+ m)
+	λ1 = im .* c1 .* (μ .+ m) .+ im .* c0(μ .+ m, b, Bond) .* (μ .+ m)
+	λ2 = im .* c1 .* (μ .+ m) .- im .* c0(μ .+ m, b, Bond) .* (μ .+ m)
 	
 end
 
@@ -244,7 +244,7 @@ function Ag(N, z, S0z, q0z, c)
 end
 
 # ╔═╡ 4ee55b92-512b-431e-9973-d0c283aa13d2
-Ag(N, z, S0z, q0z, c0)
+Ag(N, z, S0z, q0z, c1)
 
 # ╔═╡ 8d7afa78-57ae-4fb9-8899-4254f22a11f8
 function Bg(N, z)
@@ -253,13 +253,16 @@ function Bg(N, z)
 	B = zeros(2*N+1, 2*N+1) .+ 0.0im
 
 	# loop over index to populate matrix
-	for mm = 1:(2*N + 1)
+	for mm = 1:(2*N+1)
 
 		# working with both code and matrix indicies
-		m = mm
+		m = mm - 1
 		
-		j = -m
-		jj = -j + 2*N - 2*(mm-1)
+		# j = -m
+		# jj = -j + 2*N - 2*(mm-1)
+
+		j = m
+		jj = j + 1
 
 		# define integrand specifc to matrix
 		term = -1
@@ -280,7 +283,7 @@ Bg(N, z)
 md"Should B even be all -1?"
 
 # ╔═╡ 5ec63fde-9d89-428e-9efa-a9c4d43104ba
-1/(2*π) .* trapz(z, exp.(- im .* 2 .* z))
+1/(2*π) .* trapz(z, exp.(im .* 9 .* z))
 
 # ╔═╡ c2ec1e3a-7ed5-43de-867a-bfa2f25de5af
 function Eg(N, z, S0, S0z, S0zz, q0z, c, B, μ)
@@ -314,7 +317,7 @@ function Eg(N, z, S0, S0z, S0zz, q0z, c, B, μ)
 end
 
 # ╔═╡ ce187832-a000-4d42-bdfd-da238e644f59
-Eg(N, z, S0, S0z, S0zz, q0z, c0, Bond, μ)
+Eg(N, z, S0, S0z, S0zz, q0z, c1, Bond, μ)
 
 # ╔═╡ 0b757a49-b1a3-4d6d-b482-fe7adce2c499
 function Fg(N, z, S0, S0z, q0z, c, μ)
@@ -349,7 +352,7 @@ function Fg(N, z, S0, S0z, q0z, c, μ)
 end
 
 # ╔═╡ 73828383-6b1f-4f8b-ab22-b2c5e1f581a0
-Fg(N, z, S0, S0z, q0z, c0, μ)
+Fg(N, z, S0, S0z, q0z, c1, μ)
 
 # ╔═╡ b676b7ee-9d47-41dd-a80d-60fa8556a38e
 md"###### Non-local
@@ -426,7 +429,7 @@ function Gg(N, z, S0, b, c, μ)
 end
 
 # ╔═╡ 8c00452c-2585-4edc-9ed6-b5befaa7991d
-Gg(N, z, S0, b, c0, μ)
+Gg(N, z, S0, b, c1, μ)
 
 # ╔═╡ b586cc56-cef0-4a0a-b31d-b7a9b37ecffa
 function Hg(N, z, S0, b, μ)
@@ -465,6 +468,7 @@ end
 begin
 
 	λ = zeros(ComplexF64, length(μ))
+	# λ = zeros(ComplexF64, 0)
 	
 for i = 1:length(μ)
 
@@ -488,12 +492,22 @@ for i = 1:length(μ)
 	# save solution
 	λ[i] = (solutions.values)[5]
 
+	# append!(λ, solutions.values)
+
 	
 end
 end
 
 # ╔═╡ 43165603-47c4-4107-8c7a-6bd4f056939c
 scatter(λ)
+
+# ╔═╡ 7d535fe6-f885-4ab6-8660-392887cb8e4b
+begin
+	scatter(μ,real(λ), label = "Re{λ}")
+	scatter!(μ,imag(λ), label = "Im{λ}")
+
+	xlabel!(L"\mu")
+end
 
 # ╔═╡ 7bc4c8dc-0134-47fd-bc6a-18fbe81aff82
 Hg(N, z, S0, b, μ)
@@ -1586,12 +1600,13 @@ version = "1.4.1+1"
 # ╠═70f948f9-e526-47c3-98c9-d745493a5e18
 # ╠═50917e2b-48b0-41cb-95cd-a2d7b3a8bf7b
 # ╠═43165603-47c4-4107-8c7a-6bd4f056939c
+# ╠═7d535fe6-f885-4ab6-8660-392887cb8e4b
 # ╟─d2eeccbe-1f59-4e5e-9e64-342a38b8f477
 # ╟─191f060d-4302-4b18-82f8-6e20224ee201
 # ╟─9bc57aaf-5cba-4569-975c-a504730b8008
 # ╠═4ee55b92-512b-431e-9973-d0c283aa13d2
 # ╟─8d7afa78-57ae-4fb9-8899-4254f22a11f8
-# ╠═1eabaff3-9776-4280-a4dc-5686441544f4
+# ╟─1eabaff3-9776-4280-a4dc-5686441544f4
 # ╟─25073141-5264-480a-9425-08ee4208bd1a
 # ╠═5ec63fde-9d89-428e-9efa-a9c4d43104ba
 # ╟─c2ec1e3a-7ed5-43de-867a-bfa2f25de5af
