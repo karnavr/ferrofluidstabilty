@@ -21,6 +21,7 @@ begin
 	using SpecialFunctions
 	using LaTeXStrings
 	using Trapz
+	using DelimitedFiles
 	using PlutoUI
 	TableOfContents()
 end
@@ -57,8 +58,22 @@ begin
 	b = 0.1
 	ϵ = 1 - Bond/2
 
-	c0 = speed0(1, b, Bond) # wave speed at k = 1
+	c1 = speed0(1, b, Bond) # wave speed at k = 1
 	
+end
+
+# ╔═╡ 0c13895c-6bd9-4377-929a-285d2b59843c
+function fourierToProfile(coeffs, domain)
+	
+	N = length(coeffs)	# number of fourier coeffs (a0, a1, ...)
+	
+	profile = 0 		# initialize profile
+	
+	for i = 0:(N-1)
+		profile = profile .+ coeffs[i+1] .* cos.(i .* domain) 
+	end
+
+	return profile
 end
 
 # ╔═╡ 042be35a-81e4-45ca-b1cf-2023be8092bb
@@ -82,8 +97,8 @@ md"m = $(@bind m PlutoUI.Slider(1:100, show_value = true, default=1))"
 begin
 	μ = collect(range(0.001,1.0,100))
 
-	λ1 = im .* c0 .* (μ .+ m) .+ im .* c0 .* (μ .+ m)
-	λ2 = im .* c0 .* (μ .+ m) .- im .* c0 .* (μ .+ m)
+	λ1 = im .* c1 .* (μ .+ m) .+ im .* c1 .* (μ .+ m)
+	λ2 = im .* c1 .* (μ .+ m) .- im .* c1 .* (μ .+ m)
 	
 end
 
@@ -113,28 +128,76 @@ We can also solve the problem numerically and see if we get the same results"
 md"### Generalized Eigenvalue Problem"
 
 # ╔═╡ 1b148894-7680-4f9e-b489-eec0d89db4a5
-md"Import numerical solution data:"
+md"Import numerical solution data and convert from fourier coeffs to profiles:"
 
 # ╔═╡ bb883c2d-8049-414f-adfe-919bacc1b6a9
+begin
+	# import results as array
+	msolutions = readdlm("matlab_solutions.csv", ',', Float64)
 
+	mcoeffs = msolutions[:,2:end]
+	mspeeds = msolutions[:,1]
+
+	nsols = length(msolutions[:,1])
+
+	# convert profiles + extract speeds
+	mdomain = collect(range(-pi,pi,100))
+	mprofiles = zeros(nsols,length(mdomain))
+
+	for i = 1:nsols
+		mprofiles[i,:] = fourierToProfile(mcoeffs[i,:], mdomain)
+	end
+
+	# reflect profiles 
+	mprofiles = [mprofiles[:,Int(end/2):end] mprofiles[:,1:Int(end/2)-1]]; nothing
+
+end
+
+# ╔═╡ ef4bcf38-abc2-416f-a377-547930c69b62
+@bind mprofileindex PlutoUI.Slider(1:nsols, default=1)
+
+# ╔═╡ 6d9b1e2d-032f-4f78-ad59-84c408de490b
+begin
+	# plot profiles 
+	profile_plot = plot(mdomain, mprofiles[mprofileindex,:], legend=false, title = "a1 = $(round(mcoeffs[mprofileindex,2], digits=3))", lw=2)
+	ylims!(0.45,1.3)
+	xlabel!(L"z"); ylabel!(L"S")
+
+	# plot coeffs 
+	first_coeff = 0
+	coeff_plot = scatter(abs.(mcoeffs[mprofileindex,first_coeff+1:end]), legend=false, title="k = $(mprofileindex)", xticks = :all, yaxis=:log)
+	xlabel!("a$(first_coeff) to a$(length(mcoeffs[1,:])-1)")
+
+	# plot branch
+	branch_plot = scatter(mspeeds[1:mprofileindex], mcoeffs[1:mprofileindex,2], legend = false, markersize=4)
+	xlabel!(L"c"); ylabel!(L"a_1")
+	xlims!(0.73,0.82); ylims!(0.04,0.34)
+	
+	plot(profile_plot, branch_plot, size=(700,350))
+end
+
+# ╔═╡ 30364597-1f57-4e30-ade6-31ad6f11949d
+md"Create ideal data for now:"
 
 # ╔═╡ 458b05b7-5655-415d-a9bf-f64d157ac891
 begin
 	z = collect(range(-π,+π,100))
 
-	S0 = 0.0001 .* cos.(z) .+ 1
+	S0 = - 0.001 .* cos.(z) .+ 1
+	profile1 = mprofiles[1,:]
 	S0z = zeros(length(z))
 	S0zz = zeros(length(z))
 
 	S0sq = 1 .+ S0z.^2
 
 	scatter(z,S0)
+	scatter!(z,profile1)
 	# scatter!(z,S0z)
 end
 
 # ╔═╡ 70f948f9-e526-47c3-98c9-d745493a5e18
 begin
-	c = c0
+	c = c1
 	N = 2
 	# q0z = c0 + c0
 
@@ -212,6 +275,12 @@ end
 
 # ╔═╡ 1eabaff3-9776-4280-a4dc-5686441544f4
 Bg(N, z)
+
+# ╔═╡ 25073141-5264-480a-9425-08ee4208bd1a
+md"Should B even be all -1?"
+
+# ╔═╡ 5ec63fde-9d89-428e-9efa-a9c4d43104ba
+1/(2*π) .* trapz(z, exp.(- im .* 2 .* z))
 
 # ╔═╡ c2ec1e3a-7ed5-43de-867a-bfa2f25de5af
 function Eg(N, z, S0, S0z, S0zz, q0z, c, B, μ)
@@ -395,29 +464,19 @@ end
 # ╔═╡ 50917e2b-48b0-41cb-95cd-a2d7b3a8bf7b
 begin
 
-	# A = zeros(ComplexF64, length(2N+1))
-	# B = zeros(length(2N+1))
-	# C = zeros(length(2N+1))
-	# E = zeros(length(2N+1))
-	# F = zeros(length(2N+1))
-	# G = zeros(length(2N+1))
-	# H = zeros(length(2N+1))
-
-	# solutions = zeros(length[μ])
-
 	λ = zeros(ComplexF64, length(μ))
 	
 for i = 1:length(μ)
 
 	# create matrices
-	A = Ag(N, z, S0z, q0z, c0)
+	A = Ag(N, z, S0z, q0z, c)
 	B = Bg(N, z)
-	E = Eg(N, z, S0, S0z, S0zz, q0z, c0, Bond, μ[i])
-	F = Fg(N, z, S0, S0z, q0z, c0, μ[i])
+	E = Eg(N, z, S0, S0z, S0zz, q0z, c, Bond, μ[i])
+	F = Fg(N, z, S0, S0z, q0z, c, μ[i])
 
 	C = Cg(N, z, S0, b, μ[i])
 	D = zeros(2N+1,2N+1)
-	G = Gg(N, z, S0, b, c0, μ[i])
+	G = Gg(N, z, S0, b, c, μ[i])
 	H = Hg(N, z, S0, b, μ[i])
 
 	lhs = [A B; C D]
@@ -436,15 +495,13 @@ end
 # ╔═╡ 43165603-47c4-4107-8c7a-6bd4f056939c
 scatter(λ)
 
-# ╔═╡ a99205c8-6b2f-4a65-b268-8878dac500c5
-length(λ)
-
 # ╔═╡ 7bc4c8dc-0134-47fd-bc6a-18fbe81aff82
 Hg(N, z, S0, b, μ)
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
+DelimitedFiles = "8bb1440f-4735-579b-a4ab-409b98df4dab"
 LaTeXStrings = "b964fa9f-0449-5b57-a5c2-d3ea65f4040f"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
@@ -1511,6 +1568,7 @@ version = "1.4.1+1"
 # ╠═d60a4f84-af0b-48ff-95ff-5ddaef40c034
 # ╟─48249892-d7de-4048-88bb-dcd93e81da62
 # ╟─1e018b6a-6e6f-470d-8e41-deaa52570d7f
+# ╟─0c13895c-6bd9-4377-929a-285d2b59843c
 # ╟─042be35a-81e4-45ca-b1cf-2023be8092bb
 # ╟─cc94cd11-da4f-4e31-800c-3053d7bfb2fd
 # ╠═5fe20173-ce5d-4cbd-860d-f36833c1fdeb
@@ -1521,17 +1579,21 @@ version = "1.4.1+1"
 # ╟─9196cc07-f410-4843-8a4c-5c716f36fa4b
 # ╟─1b148894-7680-4f9e-b489-eec0d89db4a5
 # ╠═bb883c2d-8049-414f-adfe-919bacc1b6a9
+# ╟─ef4bcf38-abc2-416f-a377-547930c69b62
+# ╠═6d9b1e2d-032f-4f78-ad59-84c408de490b
+# ╟─30364597-1f57-4e30-ade6-31ad6f11949d
 # ╠═458b05b7-5655-415d-a9bf-f64d157ac891
 # ╠═70f948f9-e526-47c3-98c9-d745493a5e18
 # ╠═50917e2b-48b0-41cb-95cd-a2d7b3a8bf7b
 # ╠═43165603-47c4-4107-8c7a-6bd4f056939c
-# ╠═a99205c8-6b2f-4a65-b268-8878dac500c5
 # ╟─d2eeccbe-1f59-4e5e-9e64-342a38b8f477
 # ╟─191f060d-4302-4b18-82f8-6e20224ee201
 # ╟─9bc57aaf-5cba-4569-975c-a504730b8008
 # ╠═4ee55b92-512b-431e-9973-d0c283aa13d2
 # ╟─8d7afa78-57ae-4fb9-8899-4254f22a11f8
 # ╠═1eabaff3-9776-4280-a4dc-5686441544f4
+# ╟─25073141-5264-480a-9425-08ee4208bd1a
+# ╠═5ec63fde-9d89-428e-9efa-a9c4d43104ba
 # ╟─c2ec1e3a-7ed5-43de-867a-bfa2f25de5af
 # ╠═ce187832-a000-4d42-bdfd-da238e644f59
 # ╟─0b757a49-b1a3-4d6d-b482-fe7adce2c499
