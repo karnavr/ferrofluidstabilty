@@ -45,7 +45,7 @@ end
 function c0(k, b, B)
 	# wave speed for small amplitude waves, depending on the wave-number k
 	
-	c0 = sqrt.((-β(1,k,b,1) ./ β(0,k,b,1)) .* (k.^2 .- 1 .+ B))
+	c0  = sqrt.((1 ./ k).*((-β(1,k,b,1) ./ β(0,k,b,1)) .* (k.^2 .- 1 .+ B)))
 
 	return c0
 	
@@ -111,7 +111,7 @@ begin
 	ylabel!(L"Im\{\lambda\}")
 
 	xlims!(-0.5,0.5)
-	ylims!(-0.5,7)
+	ylims!(-5,7)
 
 	# scatter(λ1)
 end
@@ -1580,9 +1580,9 @@ version = "1.4.1+1"
 # ╟─6009f94c-6eb6-400f-8f73-f0433e82e42d
 # ╟─8eeaba0e-8d13-4dea-9534-b45c53e9847f
 # ╠═d60a4f84-af0b-48ff-95ff-5ddaef40c034
-# ╟─48249892-d7de-4048-88bb-dcd93e81da62
+# ╠═48249892-d7de-4048-88bb-dcd93e81da62
 # ╟─1e018b6a-6e6f-470d-8e41-deaa52570d7f
-# ╟─0c13895c-6bd9-4377-929a-285d2b59843c
+# ╠═0c13895c-6bd9-4377-929a-285d2b59843c
 # ╟─042be35a-81e4-45ca-b1cf-2023be8092bb
 # ╟─cc94cd11-da4f-4e31-800c-3053d7bfb2fd
 # ╠═5fe20173-ce5d-4cbd-860d-f36833c1fdeb

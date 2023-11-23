@@ -18,6 +18,48 @@ end
 # ╔═╡ 77de6ee3-6225-4a84-80ad-e972702ce599
 md"## Waves on a Ferrofluid Jet"
 
+# ╔═╡ 97edda20-cc50-4979-8b14-3f4cc683147b
+md"##### Helper function definitions"
+
+# ╔═╡ 2d697339-389f-4ac6-96ee-949338445936
+function β(n, k, b, S0)
+
+	beta1 = besseli.(1, k*b) .* besselk.(n, k.*S0)
+	beta2 = (-1)^n .* besselk.(1, k*b) .* besseli.(n, k.*S0)
+
+	return beta1 + beta2
+end
+
+# ╔═╡ a9a6e8f2-62e4-4d75-9243-5bdcb4064ca5
+function c0(k, b, B)
+	# wave speed for small amplitude waves, depending on the wave-number k
+	
+	c0 = sqrt.((1 ./ k).*((-β(1,k,b,1) ./ β(0,k,b,1)) .* (k.^2 .- 1 .+ B)))
+
+	return c0
+	
+end
+
+# ╔═╡ 393f4352-2cf0-4c09-a077-7124e20ab7ef
+function fourierToReal(coefficients, domain)
+    N = length(coefficients) - 1
+    S = zeros(length(domain))  # Profile S
+    Sz = zeros(length(domain))  # First derivative Sz
+    Szz = zeros(length(domain))  # Second derivative Szz
+
+    for (i, x) in enumerate(domain)
+        # Calculate the series and its derivatives at each point x
+        S[i] = coefficients[1] 
+        for n in 1:N
+            S[i] += coefficients[n + 1] * cos(n * x)
+            Sz[i] -= n * coefficients[n + 1] * sin(n * x)
+            Szz[i] -= n^2 * coefficients[n + 1] * cos(n * x)
+        end
+    end
+
+    return S, Sz, Szz
+end
+
 # ╔═╡ 5760cc7d-3a01-4378-8a34-90354c8b6fcf
 md"##### Domain and problem constants"
 
@@ -25,9 +67,9 @@ md"##### Domain and problem constants"
 begin
 	# domain constants + domain
 	L = π
-	N = 32
+	N = 36
 	
-	dz = 2*L/(4*N+1)
+	dz = 2*L/(2*N+1)
 	z = collect(-L:dz:L)      # 2N + 2 points
 	
 	# define magnetic constants
@@ -42,7 +84,7 @@ begin
 	# define the branch extent
 	branchPoints = 100
 
-	a1_vals = collect(range(0.05,0.33, branchPoints+1))
+	a1_vals = collect(range(0.001,0.33, branchPoints+1))
 end
 
 # ╔═╡ 205db03b-dd18-4e82-99a8-e81972ce720b
@@ -70,7 +112,8 @@ end
 # ╔═╡ 9dd85ed3-ba41-4cde-abba-1a045286dc3c
 begin
 	initial_guess = (1e-10).*ones(branchPoints+1, N+2)
-	initial_guess[1,1:5] = [c0other, 10.0, a1_vals[1], 0.1, 1e-10]
+	initial_guess[1,1:5] = [c0other, 1.0, a1_vals[1], 1e-10, 1e-10]
+	initial_guess
 end
 
 # ╔═╡ 22f3e72d-9bf0-4b38-80a0-e0fb526be387
@@ -83,23 +126,23 @@ function equations(unknowns, z, N, b, B, E, amp1, amp0)
 	a1 = coeffs[2];
 	
 	# let's assume S is made of cosine modes
-	S = a0;
-	Sz = 0;
-	Szz = 0;
-	
-	for k = 1:N
-	    S = @. S + coeffs[k+1] .* cos.(k.*z);
-	    Sz = @. Sz - k .* coeffs[k+1].*sin.(k.*z);
-	    Szz = @. Szz - k.^2 .* coeffs[k+1].*cos.(k.*z);
+	S = a0
+	Sz = 0
+	Szz = 0
+
+	for i = 1:(length(coeffs) - 1)
+		S = S .+ coeffs[i+1] .* cos.(i.*z);
+		Sz = Sz .- i .* coeffs[i+1].*sin.(i.*z);
+		Szz = Szz .- i.^2 .* coeffs[i+1].*cos.(i.*z);
 	end
 	
 	Szsq = 1 .+ (Sz.^2); # commonly used value in eqs
 	
-	one_p = @. (Szsq).*((c.^2)./2 - 1 ./ (S.*sqrt.(Szsq)) + Szz./(Szsq.^(1.5)) + B./(2 .* S.^2) + E);
+	one_p = (Szsq).*((c.^2)./2 .- 1 ./ (S.*sqrt.(Szsq)) .+ Szz./(Szsq.^(1.5)) .+ B./(2 .* S.^2) .+ E);
 	
 	integrand = zeros(N,length(z));
-	integral = zeros(N,1);
-	eqns = zeros(N+2,1);
+	integral = zeros(N);
+	eqns = zeros(N+2);
 	
 	for k = 1:N
 	    one = k .* S .* sqrt.(one_p)
@@ -108,7 +151,7 @@ function equations(unknowns, z, N, b, B, E, amp1, amp0)
 	    integrand[k, :] = one .* two
 		
 	    # Normalize the integrand before integration to prevent numerical issues
-	    integrand[k, :] ./= maximum(abs.(integrand[k, :]))
+	    # integrand[k, :] ./= maximum(abs.(integrand[k, :]))
 	    integral[k] = trapz(z, integrand[k, :] .* cos.(k .* z))
 	end
 	
@@ -123,7 +166,7 @@ end
 for i = 1:branchPoints
 
     # solve the system
-    result = optimize(X -> equations(X, z, N, b, B, E, initial_guess[i,2], 1), initial_guess[i,:], Newton())
+    result = optimize(X -> equations(X, z, N, b, B, E, initial_guess[i,3], 1), initial_guess[i,:], Newton())
 
     # capture current solution
     X = Optim.minimizer(result)
@@ -135,29 +178,28 @@ for i = 1:branchPoints
     
     # update initial guess
     initial_guess[i+1,:] = solutions[i,:]
+
+	loops += 1
 end
 
 # ╔═╡ 317905e5-d12f-4607-bfa5-8b4c5d4acdff
-begin
-	# convert solutions from fourier to real
-	S = zeros(branchPoints, length(z))
-	infnorms = zeros(branchPoints)
+# begin
+# 	# convert solutions from fourier to real
+# 	S = zeros(branchPoints, length(z))
+# 	infnorms = zeros(branchPoints)
 	
-	for i = 1:branchPoints
-	    for k = 0:N
-	        S[i,:] .+= coeff_sols[i, k+1] .* cos.(k.*z)
-	    end
+# 	for i = 1:branchPoints
+# 	    for k = 0:N
+# 	        S[i,:] .+= coeff_sols[i, k+1] .* cos.(k.*z)
+# 	    end
 	    
-	    # compute infinity norms
-	    infnorms[i] = maximum(abs.(S[i,:] .- 1))
-	end
-end
+# 	    # compute infinity norms
+# 	    infnorms[i] = maximum(abs.(S[i,:] .- 1))
+# 	end
+# end
 
 # ╔═╡ 196e8d99-8648-48dd-bc8f-343088dcd1a0
-
-
-# ╔═╡ 668eecce-d37c-41a1-a710-1b17ad5d29a1
-
+equations(initial_guess, z, N, b, B, E, Complex(0.01), Complex(10.0))
 
 # ╔═╡ d1198bc1-3e21-48d5-9316-48eb6d7c715e
 md"### Periodic Waves"
@@ -1343,6 +1385,10 @@ version = "1.4.1+1"
 # ╔═╡ Cell order:
 # ╠═58fc8746-79f5-11ee-1840-13e7eb19f6d9
 # ╟─77de6ee3-6225-4a84-80ad-e972702ce599
+# ╟─97edda20-cc50-4979-8b14-3f4cc683147b
+# ╟─a9a6e8f2-62e4-4d75-9243-5bdcb4064ca5
+# ╟─2d697339-389f-4ac6-96ee-949338445936
+# ╟─393f4352-2cf0-4c09-a077-7124e20ab7ef
 # ╟─5760cc7d-3a01-4378-8a34-90354c8b6fcf
 # ╠═7e0f1490-cab0-4b2b-ad14-91bf577dfd36
 # ╠═cfb29296-fae6-4962-9ff7-fa712f98eab9
@@ -1355,7 +1401,6 @@ version = "1.4.1+1"
 # ╠═22f3e72d-9bf0-4b38-80a0-e0fb526be387
 # ╠═317905e5-d12f-4607-bfa5-8b4c5d4acdff
 # ╠═196e8d99-8648-48dd-bc8f-343088dcd1a0
-# ╠═668eecce-d37c-41a1-a710-1b17ad5d29a1
 # ╟─d1198bc1-3e21-48d5-9316-48eb6d7c715e
 # ╟─91ca4bf9-c0ac-45ca-9cff-633b0ef470e7
 # ╟─00000000-0000-0000-0000-000000000001
