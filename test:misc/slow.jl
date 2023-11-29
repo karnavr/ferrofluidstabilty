@@ -4,24 +4,38 @@
 using Markdown
 using InteractiveUtils
 
-# ╔═╡ 58fc8746-79f5-11ee-1840-13e7eb19f6d9
+# This Pluto notebook uses @bind for interactivity. When running this notebook outside of Pluto, the following 'mock version' of @bind gives bound variables a default value (instead of an error).
+macro bind(def, element)
+    quote
+        local iv = try Base.loaded_modules[Base.PkgId(Base.UUID("6e696c72-6542-2067-7265-42206c756150"), "AbstractPlutoDingetjes")].Bonds.initial_value catch; b -> missing; end
+        local el = $(esc(element))
+        global $(esc(def)) = Core.applicable(Base.get, el) ? Base.get(el) : iv(el)
+        el
+    end
+end
+
+# ╔═╡ 34db6036-895a-11ee-177f-81edf47a49f3
 begin
 	using Plots
 	using SpecialFunctions
-	using Optim
-	using LaTeXStrings
 	using Trapz
+	using Optim
+	using NLsolve
+	using ProgressLogging
 	using PlutoUI
-	TableOfContents()
+	using LaTeXStrings
+	using ForwardDiff
+	using Roots
+	using LinearAlgebra
 end
 
-# ╔═╡ 77de6ee3-6225-4a84-80ad-e972702ce599
-md"## Waves on a Ferrofluid Jet"
+# ╔═╡ ce97b5d3-516d-4a40-9d8f-e0141c035f19
+using .Threads
 
-# ╔═╡ 97edda20-cc50-4979-8b14-3f4cc683147b
-md"##### Helper function definitions"
+# ╔═╡ 1f76d802-7b93-407a-a57d-8b2dcad9c3a9
+md"###### Helper functions"
 
-# ╔═╡ 2d697339-389f-4ac6-96ee-949338445936
+# ╔═╡ 96a34f7a-7433-42dd-8673-434c95a309e0
 function β(n, k, b, S0)
 
 	beta1 = besseli.(1, k*b) .* besselk.(n, k.*S0)
@@ -30,7 +44,7 @@ function β(n, k, b, S0)
 	return beta1 + beta2
 end
 
-# ╔═╡ a9a6e8f2-62e4-4d75-9243-5bdcb4064ca5
+# ╔═╡ 202dc8f5-d66f-4680-b9d8-9cac9bfe8f12
 function c0(k, b, B)
 	# wave speed for small amplitude waves, depending on the wave-number k
 	
@@ -40,7 +54,7 @@ function c0(k, b, B)
 	
 end
 
-# ╔═╡ 393f4352-2cf0-4c09-a077-7124e20ab7ef
+# ╔═╡ b21a27b2-1127-4685-9479-6b87f115ce4b
 function fourierToReal(coefficients, domain)
     N = length(coefficients) - 1
     S = zeros(length(domain))  # Profile S
@@ -60,15 +74,14 @@ function fourierToReal(coefficients, domain)
     return S, Sz, Szz
 end
 
-# ╔═╡ 5760cc7d-3a01-4378-8a34-90354c8b6fcf
-md"##### Domain and problem constants"
+# ╔═╡ f4c06f38-4e11-4915-851e-793f725547aa
+md"Domain and problem constants:"
 
-# ╔═╡ 7e0f1490-cab0-4b2b-ad14-91bf577dfd36
+# ╔═╡ 54ba9057-58b2-4487-a72e-e1d85c4505e2
 begin
-	# domain constants + domain
 	L = π
 	N = 36
-	
+
 	dz = 2*L/(2*N+1)
 	z = collect(-L:dz:L)      # 2N + 2 points
 	
@@ -76,152 +89,350 @@ begin
 	B = 1.5
 	b = 0.1
 	
-	E = 1 - B/2; nothing
+	E = 1 - B/2
 end
 
-# ╔═╡ cfb29296-fae6-4962-9ff7-fa712f98eab9
+# ╔═╡ 59ed4c8d-983a-45bf-9fad-b75515b76436
+md"Define the branch stuff, number of values and what we'll force those values to be:"
+
+# ╔═╡ ae5fdcde-4f8c-41a2-917a-97c774064cd6
 begin
-	# define the branch extent
-	branchPoints = 100
+	# branchN = 100
+	# a1Vals = collect(range(0.001, 0.19, branchN + 1))
 
-	a1_vals = collect(range(0.001,0.33, branchPoints+1))
+	a1Vals = collect(0.001:3e-3:0.4)
+	branchN = Int(length(a1Vals))
 end
 
-# ╔═╡ 205db03b-dd18-4e82-99a8-e81972ce720b
-md"Now let's initialize the solution arrays"
+# ╔═╡ 6c97e45a-a07d-4d56-a4c9-de8124645fd1
+md"Create the first initial guess:"
 
-# ╔═╡ d93d0a0a-a6e3-41c3-ac49-20f1352f4246
-begin
-	c = zeros(branchPoints)
-	coeff_sols = zeros(branchPoints, N+1)
-	
-	solutions = zeros(branchPoints, N+2); nothing
-end
-
-# ╔═╡ d68c18bc-9185-4e44-94fe-f914a0b4b690
-md"Create the first initial guess"
-
-# ╔═╡ 14823be5-af35-47c1-b71d-2db319572035
+# ╔═╡ 31cc0925-a6de-4ddf-b58a-6128b1adab02
 begin
 	k1 = 1
-	c0other = sqrt(1/(k1).*(besseli(1,k1)*besselk(1,k1*b)-besseli(1,k1*b)*besselk(1,k1))./(besseli(1,k1*b)*besselk(0,k1)+besseli(0,k1)*besselk(1,k1*b)).*(k1^2-1+B))
 
-	# cstar = sqrt(c0other^2 + (2-B)); c0 = cstar;
+	cInitial = c0(k1, b, B)
 end
 
-# ╔═╡ 9dd85ed3-ba41-4cde-abba-1a045286dc3c
+# ╔═╡ d1d73af4-93cb-41ec-ad44-40dd3c3fc5c1
+md"Create an initial guess array where each row corresponds to the initial guess for that branch point."
+
+# ╔═╡ d7b5925c-3f19-48a8-a9f1-b22e4517caee
+initial_guess = (1e-10).*ones(branchN+1, N+2)
+
+# ╔═╡ ab13d080-1f98-448a-a2dd-cd7fc32cf2fb
+md"Populate the first row with the first initial guess:"
+
+# ╔═╡ c8962a31-216a-4272-bfdd-829e3ff336ed
 begin
-	initial_guess = (1e-10).*ones(branchPoints+1, N+2)
-	initial_guess[1,1:5] = [c0other, 1.0, a1_vals[1], 1e-10, 1e-10]
+	initial_guess[1,1:5] = [cInitial, 1.0, a1Vals[1], 1e-10, 1e-10]
 	initial_guess
 end
 
-# ╔═╡ 22f3e72d-9bf0-4b38-80a0-e0fb526be387
-function equations(unknowns, z, N, b, B, E, amp1, amp0)
+# ╔═╡ a7b7b018-2dbe-467e-9ff2-9c9eb033eb56
+md"Now let's create the equations function:"
 
+# ╔═╡ 490bb727-4711-4a42-a857-4d93dd9c6913
+unknowns = initial_guess[1,:]
+
+# ╔═╡ 97561b24-14af-4d81-8e5e-35f7c3d41f88
+begin
 	c = unknowns[1];
-	coeffs = unknowns[2:N+2]; # N + 1
-	
+	coeffs = unknowns[2:N+2]; # N + 1 coeffs
+end
+
+# ╔═╡ f4ea8605-042f-497c-a00a-e2dd59e9df58
+begin
 	a0 = coeffs[1];
 	a1 = coeffs[2];
-	
-	# let's assume S is made of cosine modes
-	S = a0
-	Sz = 0
-	Szz = 0
-
-	for i = 1:(length(coeffs) - 1)
-		S = S .+ coeffs[i+1] .* cos.(i.*z);
-		Sz = Sz .- i .* coeffs[i+1].*sin.(i.*z);
-		Szz = Szz .- i.^2 .* coeffs[i+1].*cos.(i.*z);
-	end
-	
-	Szsq = 1 .+ (Sz.^2); # commonly used value in eqs
-	
-	one_p = (Szsq).*((c.^2)./2 .- 1 ./ (S.*sqrt.(Szsq)) .+ Szz./(Szsq.^(3/2)) .+ B./(2 .* S.^2) .+ E);
-	
-	integrand = zeros(N,length(z));
-	integral = zeros(N);
-	eqns = zeros(N+2);
-	
-	for k = 1:N
-	    one = k .* S .* sqrt.(one_p)
-	    two = besselk.(1, k * b) .* besseli.(1, k .* S) .- besseli.(1, k * b) .* besselk.(1, k .* S)
-		
-	    integrand[k, :] = one .* two
-		
-	    # Normalize the integrand before integration to prevent numerical issues
-	    integrand[k, :] ./= maximum(abs.(integrand[k, :]))
-	    integral[k] = trapz(z, integrand[k, :] .* cos.(k .* z))
-	end
-	
-	eqns[1:N] .= real.(integral)
-	eqns[N+1] = abs(a0 - amp0)
-	eqns[N+2] = abs(a1 - amp1)
-	
-	    return eqns
 end
 
-# ╔═╡ 56b739ce-530f-4042-962f-67c8474ab577
-for i = 1:branchPoints
+# ╔═╡ 26a72ac2-e487-4568-bd4b-a6e925e0f4fe
+S, Sz, Szz = fourierToReal(coeffs, z)
 
-    # solve the system
-    result = optimize(X -> equations(X, z, N, b, B, E, initial_guess[i,3], 1), initial_guess[i,:], Newton())
-
-    # capture current solution
-    X = Optim.minimizer(result)
-	
-    solutions[i,:] = X
-	
-    c[i] = X[1]
-    coeff_sols[i,:] = X[2:end]  # N + 1
-    
-    # update initial guess
-    initial_guess[i+1,:] = solutions[i,:]
-
-	loops += 1
+# ╔═╡ c1bc1360-6128-4f4b-bbf1-606f6d32156f
+begin
+	scatter(z, S)
 end
 
-# ╔═╡ 317905e5-d12f-4607-bfa5-8b4c5d4acdff
+# ╔═╡ 7b71e97f-6683-4821-ad5b-f5cd9b685e11
+md"Now create the N interands and then integrate them:"
+
+# ╔═╡ c997b5e1-ce34-4be2-b197-98a2d0ea6f09
 # begin
-# 	# convert solutions from fourier to real
-# 	S = zeros(branchPoints, length(z))
-# 	infnorms = zeros(branchPoints)
+# 	amp0 = 1.0
+# 	amp1 = a1Vals[1]
 	
-# 	for i = 1:branchPoints
-# 	    for k = 0:N
-# 	        S[i,:] .+= coeff_sols[i, k+1] .* cos.(k.*z)
-# 	    end
-	    
-# 	    # compute infinity norms
-# 	    infnorms[i] = maximum(abs.(S[i,:] .- 1))
+# 	# N integrands for k = 1:N
+# 	integrands = zeros(N, length(z))
+
+# 	# N integrals (array gets condensed on the z-axis)
+# 	integrals = zeros(N)
+
+# 	# combination of the integrands + 2 extra equations I define 
+# 	eqs = zeros(N+2)
+
+# 	# define common factors in equations 
+# 	Szsq = 1 .+ (Sz.^2);
+
+# 	one_p = (Szsq).*((c.^2)./2 .- 1 ./ (S.*sqrt.(Szsq)) .+ Szz./(Szsq.^(3/2)) .+ B./(2 .* S.^2) .+ E);
+
+# 	for k = 1:N
+# 	    one = k .* S .* sqrt.(one_p)
+# 	    two = besselk.(1, k * b) .* besseli.(1, k .* S) .- besseli.(1, k * b) .* besselk.(1, k .* S)
+		
+# 	    integrands[k, :] = one .* two
+		
+# 	    # # Normalize the integrand before integration to prevent numerical issues
+# 	    integrands[k, :] ./= maximum(abs.(integrands[k, :]))
+# 	    integrals[k] = trapz(z, integrands[k, :] .* cos.(k .* z))
 # 	end
+
+# 	eqs[1:N] = real.(integrals)
+# 	eqs[N+1] = abs(a0 - amp0)
+# 	eqs[N+2] = abs(a1 - amp1)
+	
 # end
 
-# ╔═╡ 196e8d99-8648-48dd-bc8f-343088dcd1a0
-equations(initial_guess[1,:], z, N, b, B, E, 0.001, 1.0)
+# ╔═╡ b9b086a8-b1a1-491e-8147-89aa364afa54
+function equations(unknowns::Vector{Float64}, z::Vector{Float64}, N::Int64, b::Float64, B::Float64, E::Float64, amp1::Float64, amp0::Float64)
 
-# ╔═╡ d1198bc1-3e21-48d5-9316-48eb6d7c715e
-md"### Periodic Waves"
+	c = unknowns[1]
+	coeffs = unknowns[2:N+2] # N + 1 coeffs
 
-# ╔═╡ 91ca4bf9-c0ac-45ca-9cff-633b0ef470e7
-md"### Wilton Ripples"
+	a0 = coeffs[1]
+	a1 = coeffs[2]
+
+	S, Sz, Szz = fourierToReal(coeffs, z)
+
+	integrands = zeros(N, length(z)) # N integrands for k = 1:N
+	integrals = zeros(N) # N integrals (array gets condensed on the z-axis)
+	eqs = zeros(N+2) # integrands + 2 extra equations I define later
+
+	# define common factors in equations 
+	Szsq = 1 .+ (Sz.^2);
+
+	one_p = (Szsq).*((c.^2)./2 .- 1 ./ (S.*sqrt.(Szsq)) .+ Szz./(Szsq.^(3/2)) .+ B./(2 .* S.^2) .+ E);
+
+	for k = 1:N
+	    one = k .* S .* sqrt.(Complex.(one_p))
+	    two = besselk.(1, k * b) .* besseli.(1, k .* S) .- besseli.(1, k * b) .* besselk.(1, k .* S)
+		
+	    integrands[k, :] = one .* two
+		
+	    # Normalize the integrand before integration to prevent numerical issues
+	    integrands[k, :] ./= maximum(abs.(integrands[k, :]))
+	    integrals[k] = trapz(z, integrands[k, :] .* cos.(k .* z))
+	end
+
+	eqs[1:N] = real.(integrals)
+	eqs[N+1] = abs(a0 - amp0)
+	eqs[N+2] = abs(a1 - amp1)
+
+	return eqs
+	
+end
+
+# ╔═╡ 2af22aa6-c2b5-4dce-80d3-e6cc3831c890
+begin
+	amp0 = 1.0
+	amp1 = a1Vals[1]
+end
+
+# ╔═╡ 20dc7267-7004-4d6a-b434-8d4f41d58177
+equations(unknowns, z, N, b, B, E, amp1, amp0)
+
+# ╔═╡ 4f80f0d7-1e4f-4a5d-a8fb-c217f494e5a5
+g(x::Vector{Float64}) = equations(x, z, N, b, B, E, amp1, amp0)
+
+# ╔═╡ 82edf337-fe8e-45b9-8e2e-856b5adb1c01
+begin
+	result = optimize(g, initial_guess[1,:], LBFGS())
+
+    # capture current solution
+    # X = Optim.minimizer(result)
+end
+
+# ╔═╡ 877e20bf-5a19-404d-b8c0-de608026bfd2
+nlresult = nlsolve(g, unknowns)
+
+# ╔═╡ fd6328d2-488b-418d-b4d5-3a8c4ae69b9e
+scatter(unknowns - nlresult.zero)
+
+# ╔═╡ c91eee5d-e4f5-41db-8849-7556697e584d
+begin
+	solutions = zeros(branchN, N+2)
+	# results = Array{Any}(branchN)
+end
+
+# ╔═╡ 8ea825c1-3ef5-43da-afb1-d1f611a40bb0
+nthreads()
+
+# ╔═╡ 4e712b88-bbd8-4c26-b533-7bb1ef9ec5f3
+# ╠═╡ disabled = true
+#=╠═╡
+begin
+	@progress for i = 1:branchN
+
+		f(unkno::Vector{Float64}) = equations(unkno, z, N, b, B, E, a1Vals[i], 1.0)
+
+		# solve for the current branch point 
+		result = nlsolve(f, initial_guess[i,:], autodiff = :finite)
+
+		# capture current solution
+		solutions[i,:] = result.zero
+
+		# update intial guess 
+		initial_guess[i+1,:] = solutions[i,:]
+		
+	end
+end
+  ╠═╡ =#
+
+# ╔═╡ 1825b43f-4ae3-42d1-8591-e5b8e7bfe626
+solutions
+
+# ╔═╡ 100c7385-4599-41f4-b211-061cc7a151ef
+md"Now create the profiles in real space and visualize the solutions:"
+
+# ╔═╡ 91613b95-f857-4316-8a03-6d717a412fd8
+begin
+	solcoeffs = solutions[:,2:end]
+	solspeeds = solutions[:,1]
+end
+
+# ╔═╡ 26ad8876-2f97-4bfd-87f0-351bc5095f47
+begin
+	# convert profiles + extract speeds
+	profiles = zeros(branchN,length(z))
+
+	for i = 1:branchN
+		profiles[i,:] .= fourierToReal(solcoeffs[i,:], z)[1]
+	end
+
+	# reflect profiles 
+	solprofiles = [profiles[:,Int(end/2):end] profiles[:,1:Int(end/2)-1]]
+end
+
+# ╔═╡ a9b85f0c-8c37-491d-801b-bc12acf4f657
+md"index = $(@bind pindex PlutoUI.Slider(1:branchN, show_value = true, default=1))"
+
+# ╔═╡ d3db386a-3f5c-4684-980c-12710f1c303d
+begin
+	# plot profiles 
+	profile_plot = plot(z, solprofiles[pindex,:], legend=false, title = "a1 = $(round(solcoeffs[pindex,2], digits=3))", lw=2)
+	ylims!(0.45,1.3)
+	xlabel!(L"z"); ylabel!(L"S")
+
+	# plot coeffs 
+	first_coeff = 0
+	coeff_plot = scatter(abs.(solcoeffs[pindex,first_coeff+1:end]), legend=false, title="k = $(pindex)", xticks = :all, yaxis=:log)
+	xlabel!("a$(first_coeff) to a$(length(solcoeffs[1,:])-1)")
+
+	# plot branch
+	branch_plot = scatter(solspeeds[1:pindex], solcoeffs[1:pindex,2], legend = false, markersize=4)
+	xlabel!(L"c"); ylabel!(L"a_1")
+	xlims!(0.73,0.82); ylims!(0.04,0.34)
+	
+	plot(profile_plot, branch_plot, size=(700,350))
+end
+
+# ╔═╡ 0e142e12-55a3-43a3-9bd9-65fb3f8ef85b
+# function myNewton(f, initial_guess)
+#     tol = 1e-7  # Tolerance for convergence
+#     max_iter = 100  # Maximum number of iterations
+#     x = initial_guess
+#     for i in 1:max_iter
+#         J = finite_diff_jacobian(f, x)
+#         delta_x = -J \ f(x)  # Newton's update step
+#         x += delta_x
+#         if norm(delta_x) < tol  # Check for convergence
+#             return x
+#         end
+#     end
+#     error("Failed to converge after $max_iter iterations")
+# end
+
+# ╔═╡ 8d79f0d0-95b2-4367-abf8-ba6df1dd0608
+function finite_diff_jacobian(f, x)
+    h = 1e-8  # Small perturbation
+    n = length(x)
+    J = zeros(n, n)
+    fx = f(x)
+    for i in 1:n
+        x_perturbed = copy(x)
+        x_perturbed[i] += h
+        J[:, i] = (f(x_perturbed) - fx) / h
+    end
+    return J
+end
+
+# ╔═╡ 023a639d-4312-4351-aa84-04ac703d904d
+function myNewton(f, initial_guess)
+    tol = 10e-8  # Tolerance for convergence
+    max_iter = 1000  # Maximum number of iterations
+    alpha = 1.0  # Initial step size
+    c = 1e-4  # Sufficient decrease parameter
+    rho = 0.5  # Step size reduction factor
+
+    x = initial_guess
+    for i in 1:max_iter
+        J = finite_diff_jacobian(f, x)
+        delta_x = -J \ f(x)  # Newton's update step
+        t = 1.0  # Initialize step size
+
+        # Backtracking line search
+        while norm(f(x + t * delta_x)) > norm(f(x)) + c * t * dot(f(x), delta_x)
+            t *= rho
+        end
+
+        x += t * delta_x  # Update with the found step size
+        if norm(delta_x) < tol  # Check for convergence
+            return x
+        end
+    end
+    error("Failed to converge after $max_iter iterations")
+end
+
+# ╔═╡ 3ca4a72d-fb6a-4a57-81fb-7c4fc89ee274
+begin
+	@progress for i = 1:branchN
+
+		f(unkno::Vector{Float64}) = equations(unkno, z, N, b, B, E, a1Vals[i], 1.0)
+
+		# solve for the current branch point + capture
+		solutions[i,:] = myNewton(f, initial_guess[i,:])
+
+		# update intial guess 
+		initial_guess[i+1,:] = solutions[i,:]
+		
+	end
+end
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
+ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
 LaTeXStrings = "b964fa9f-0449-5b57-a5c2-d3ea65f4040f"
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+NLsolve = "2774e3e8-f4cf-5e23-947b-6d7e65073b56"
 Optim = "429524aa-4258-5aef-a3af-852621145aeb"
 Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
 PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
+ProgressLogging = "33c8b6b6-d38a-422a-b730-caa89a2f386c"
+Roots = "f2b01f46-fcfa-551c-844a-d8ac1e96c665"
 SpecialFunctions = "276daf66-3868-5448-9aa4-cd146d93841b"
 Trapz = "592b5752-818d-11e9-1e9a-2b8ca4a44cd1"
 
 [compat]
+ForwardDiff = "~0.10.36"
 LaTeXStrings = "~1.3.1"
+NLsolve = "~4.5.1"
 Optim = "~1.7.8"
 Plots = "~1.39.0"
-PlutoUI = "~0.7.52"
+PlutoUI = "~0.7.54"
+ProgressLogging = "~0.1.4"
+Roots = "~2.0.22"
 SpecialFunctions = "~2.3.1"
 Trapz = "~2.0.3"
 """
@@ -235,9 +446,9 @@ manifest_format = "2.0"
 
 [[deps.AbstractPlutoDingetjes]]
 deps = ["Pkg"]
-git-tree-sha1 = "91bd53c39b9cbfb5ef4b015e8b582d344532bd0a"
+git-tree-sha1 = "559826a2e9fe0c4434982e0fc72b675fda8028f9"
 uuid = "6e696c72-6542-2067-7265-42206c756150"
-version = "1.2.0"
+version = "1.2.1"
 
 [[deps.Adapt]]
 deps = ["LinearAlgebra", "Requires"]
@@ -261,9 +472,9 @@ uuid = "56f22d72-fd6d-98f1-02f0-08ddc0907c33"
 uuid = "2a0f44e3-6c83-55bd-87e4-b1978d98bd5f"
 
 [[deps.BitFlags]]
-git-tree-sha1 = "43b1a4a8f797c1cddadf60499a8a077d4af2cd2d"
+git-tree-sha1 = "2dc09997850d68179b69dafb58ae806167a32b1b"
 uuid = "d1d4a3ce-64b1-5f1a-9ba4-7e7e69966f35"
-version = "0.1.7"
+version = "0.1.8"
 
 [[deps.Bzip2_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -318,6 +529,11 @@ deps = ["ColorTypes", "FixedPointNumbers", "Reexport"]
 git-tree-sha1 = "fc08e5930ee9a4e03f84bfb5211cb54e7769758a"
 uuid = "5ae59095-9a9b-59fe-a467-6f913c188581"
 version = "0.12.10"
+
+[[deps.CommonSolve]]
+git-tree-sha1 = "0eee5eb66b1cf62cd6ad1b460238e60e4b09400c"
+uuid = "38540f10-b2f7-11e9-35d8-d573e4eb0ff2"
+version = "0.2.4"
 
 [[deps.CommonSubexpressions]]
 deps = ["MacroTools", "Test"]
@@ -383,6 +599,12 @@ git-tree-sha1 = "23163d55f885173722d1e4cf0f6110cdbaf7e272"
 uuid = "b552c78f-8df3-52c6-915a-8e097449b14b"
 version = "1.15.1"
 
+[[deps.Distances]]
+deps = ["LinearAlgebra", "SparseArrays", "Statistics", "StatsAPI"]
+git-tree-sha1 = "5225c965635d8c21168e32a12954675e7bea1151"
+uuid = "b4f34e82-e78d-54a5-968a-f98e89d6e8f7"
+version = "0.10.10"
+
 [[deps.Distributed]]
 deps = ["Random", "Serialization", "Sockets"]
 uuid = "8ba89e20-285c-5b6f-9357-94700520ee1b"
@@ -422,10 +644,10 @@ uuid = "c87230d0-a227-11e9-1b43-d7ebe4e7570a"
 version = "0.4.1"
 
 [[deps.FFMPEG_jll]]
-deps = ["Artifacts", "Bzip2_jll", "FreeType2_jll", "FriBidi_jll", "JLLWrappers", "LAME_jll", "Libdl", "Ogg_jll", "OpenSSL_jll", "Opus_jll", "PCRE2_jll", "Pkg", "Zlib_jll", "libaom_jll", "libass_jll", "libfdk_aac_jll", "libvorbis_jll", "x264_jll", "x265_jll"]
-git-tree-sha1 = "74faea50c1d007c85837327f6775bea60b5492dd"
+deps = ["Artifacts", "Bzip2_jll", "FreeType2_jll", "FriBidi_jll", "JLLWrappers", "LAME_jll", "Libdl", "Ogg_jll", "OpenSSL_jll", "Opus_jll", "PCRE2_jll", "Zlib_jll", "libaom_jll", "libass_jll", "libfdk_aac_jll", "libvorbis_jll", "x264_jll", "x265_jll"]
+git-tree-sha1 = "466d45dc38e15794ec7d5d63ec03d776a9aff36e"
 uuid = "b22a6f82-2f65-5046-a5b2-351ab43fb4e5"
-version = "4.4.2+2"
+version = "4.4.4+1"
 
 [[deps.FillArrays]]
 deps = ["LinearAlgebra", "Random", "SparseArrays", "Statistics"]
@@ -732,10 +954,10 @@ deps = ["Base64"]
 uuid = "d6f4376e-aef5-505a-96c1-9c027394607a"
 
 [[deps.MbedTLS]]
-deps = ["Dates", "MbedTLS_jll", "MozillaCACerts_jll", "Random", "Sockets"]
-git-tree-sha1 = "03a9b9718f5682ecb107ac9f7308991db4ce395b"
+deps = ["Dates", "MbedTLS_jll", "MozillaCACerts_jll", "NetworkOptions", "Random", "Sockets"]
+git-tree-sha1 = "f512dc13e64e96f703fd92ce617755ee6b5adf0f"
 uuid = "739be429-bea8-5141-9913-cc70e7f3736d"
-version = "1.1.7"
+version = "1.1.8"
 
 [[deps.MbedTLS_jll]]
 deps = ["Artifacts", "Libdl"]
@@ -763,6 +985,12 @@ deps = ["DiffResults", "Distributed", "FiniteDiff", "ForwardDiff"]
 git-tree-sha1 = "a0b464d183da839699f4c79e7606d9d186ec172c"
 uuid = "d41bc354-129a-5804-8e4c-c37616107c6c"
 version = "7.8.3"
+
+[[deps.NLsolve]]
+deps = ["Distances", "LineSearches", "LinearAlgebra", "NLSolversBase", "Printf", "Reexport"]
+git-tree-sha1 = "019f12e9a1a7880459d0173c182e6a99365d7ac1"
+uuid = "2774e3e8-f4cf-5e23-947b-6d7e65073b56"
+version = "4.5.1"
 
 [[deps.NaNMath]]
 deps = ["OpenLibm_jll"]
@@ -795,9 +1023,9 @@ version = "1.4.1"
 
 [[deps.OpenSSL_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
-git-tree-sha1 = "a12e56c72edee3ce6b96667745e6cbbe5498f200"
+git-tree-sha1 = "cc6e1927ac521b659af340e0ca45828a3ffc748f"
 uuid = "458c3c95-2e84-50aa-8efc-19380b2a3a95"
-version = "1.1.23+0"
+version = "3.0.12+0"
 
 [[deps.OpenSpecFun_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "JLLWrappers", "Libdl", "Pkg"]
@@ -834,9 +1062,9 @@ version = "0.12.3"
 
 [[deps.Parsers]]
 deps = ["Dates", "PrecompileTools", "UUIDs"]
-git-tree-sha1 = "716e24b21538abc91f6205fd1d8363f39b442851"
+git-tree-sha1 = "a935806434c9d4c506ba941871b327b96d41f2bf"
 uuid = "69de0a69-1ddd-5017-9359-2bf0b02dc9f0"
-version = "2.7.2"
+version = "2.8.0"
 
 [[deps.Pipe]]
 git-tree-sha1 = "6842804e7867b115ca9de748a0cf6b364523c16d"
@@ -873,9 +1101,9 @@ version = "1.39.0"
 
 [[deps.PlutoUI]]
 deps = ["AbstractPlutoDingetjes", "Base64", "ColorTypes", "Dates", "FixedPointNumbers", "Hyperscript", "HypertextLiteral", "IOCapture", "InteractiveUtils", "JSON", "Logging", "MIMEs", "Markdown", "Random", "Reexport", "URIs", "UUIDs"]
-git-tree-sha1 = "e47cd150dbe0443c3a3651bc5b9cbd5576ab75b7"
+git-tree-sha1 = "bd7c69c7f7173097e7b5e1be07cee2b8b7447f51"
 uuid = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
-version = "0.7.52"
+version = "0.7.54"
 
 [[deps.PositiveFactorizations]]
 deps = ["LinearAlgebra"]
@@ -899,11 +1127,17 @@ version = "1.4.1"
 deps = ["Unicode"]
 uuid = "de0858da-6303-5e67-8744-51eddeeeb8d7"
 
+[[deps.ProgressLogging]]
+deps = ["Logging", "SHA", "UUIDs"]
+git-tree-sha1 = "80d919dee55b9c50e8d9e2da5eeafff3fe58b539"
+uuid = "33c8b6b6-d38a-422a-b730-caa89a2f386c"
+version = "0.1.4"
+
 [[deps.Qt6Base_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "Fontconfig_jll", "Glib_jll", "JLLWrappers", "Libdl", "Libglvnd_jll", "OpenSSL_jll", "Vulkan_Loader_jll", "Xorg_libSM_jll", "Xorg_libXext_jll", "Xorg_libXrender_jll", "Xorg_libxcb_jll", "Xorg_xcb_util_cursor_jll", "Xorg_xcb_util_image_jll", "Xorg_xcb_util_keysyms_jll", "Xorg_xcb_util_renderutil_jll", "Xorg_xcb_util_wm_jll", "Zlib_jll", "libinput_jll", "xkbcommon_jll"]
-git-tree-sha1 = "7c29f0e8c575428bd84dc3c72ece5178caa67336"
+git-tree-sha1 = "37b7bb7aabf9a085e0044307e1717436117f2b3b"
 uuid = "c0090381-4147-56d7-9ebc-da0b1113ec56"
-version = "6.5.2+2"
+version = "6.5.3+1"
 
 [[deps.REPL]]
 deps = ["InteractiveUtils", "Markdown", "Sockets", "Unicode"]
@@ -941,6 +1175,12 @@ deps = ["UUIDs"]
 git-tree-sha1 = "838a3a4188e2ded87a4f9f184b4b0d78a1e91cb7"
 uuid = "ae029012-a4dd-5104-9daa-d747884805df"
 version = "1.3.0"
+
+[[deps.Roots]]
+deps = ["ChainRulesCore", "CommonSolve", "Printf", "Setfield"]
+git-tree-sha1 = "0f1d92463a020321983d04c110f476c274bafe2e"
+uuid = "f2b01f46-fcfa-551c-844a-d8ac1e96c665"
+version = "2.0.22"
 
 [[deps.SHA]]
 uuid = "ea8e919c-243c-51af-8825-aaa63cd721ce"
@@ -991,10 +1231,10 @@ uuid = "276daf66-3868-5448-9aa4-cd146d93841b"
 version = "2.3.1"
 
 [[deps.StaticArrays]]
-deps = ["LinearAlgebra", "Random", "StaticArraysCore", "Statistics"]
-git-tree-sha1 = "0adf069a2a490c47273727e029371b31d44b72b2"
+deps = ["LinearAlgebra", "PrecompileTools", "Random", "StaticArraysCore", "Statistics"]
+git-tree-sha1 = "5ef59aea6f18c25168842bded46b16662141ab87"
 uuid = "90137ffa-7385-5640-81b9-e52037218182"
-version = "1.6.5"
+version = "1.7.0"
 
 [[deps.StaticArraysCore]]
 git-tree-sha1 = "36b3d696ce6366023a0ea192b4cd442268995a0d"
@@ -1041,9 +1281,9 @@ uuid = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [[deps.TranscodingStreams]]
 deps = ["Random", "Test"]
-git-tree-sha1 = "49cbf7c74fafaed4c529d47d48c8f7da6a19eb75"
+git-tree-sha1 = "1fbeaaca45801b4ba17c251dd8603ef24801dd84"
 uuid = "3bb67fe8-82b1-5028-8e26-92a6c54297fa"
-version = "0.10.1"
+version = "0.10.2"
 
 [[deps.Trapz]]
 git-tree-sha1 = "79eb0ed763084a3e7de81fe1838379ac6a23b6a0"
@@ -1080,9 +1320,9 @@ version = "0.4.1"
 
 [[deps.Unitful]]
 deps = ["ConstructionBase", "Dates", "InverseFunctions", "LinearAlgebra", "Random"]
-git-tree-sha1 = "a72d22c7e13fe2de562feda8645aa134712a87ee"
+git-tree-sha1 = "242982d62ff0d1671e9029b52743062739255c7e"
 uuid = "1986cc42-f94f-5a68-af5c-568840ba703d"
-version = "1.17.0"
+version = "1.18.0"
 
 [[deps.UnitfulLatexify]]
 deps = ["LaTeXStrings", "Latexify", "Unitful"]
@@ -1115,9 +1355,9 @@ version = "1.25.0+0"
 
 [[deps.XML2_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Libiconv_jll", "Zlib_jll"]
-git-tree-sha1 = "24b81b59bd35b3c42ab84fa589086e19be919916"
+git-tree-sha1 = "da69178aacc095066bad1f69d2f59a60a1dd8ad1"
 uuid = "02c8fc9c-b97f-50b9-bbe4-9be30ff0a78a"
-version = "2.11.5+0"
+version = "2.12.0+0"
 
 [[deps.XSLT_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Libgcrypt_jll", "Libgpg_error_jll", "Libiconv_jll", "Pkg", "XML2_jll", "Zlib_jll"]
@@ -1127,9 +1367,9 @@ version = "1.1.34+0"
 
 [[deps.XZ_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl"]
-git-tree-sha1 = "cf2c7de82431ca6f39250d2fc4aacd0daa1675c0"
+git-tree-sha1 = "522b8414d40c4cbbab8dee346ac3a09f9768f25d"
 uuid = "ffd25f8a-64ca-5728-b0f7-c24cf3aae800"
-version = "5.4.4+0"
+version = "5.4.5+0"
 
 [[deps.Xorg_libICE_jll]]
 deps = ["Libdl", "Pkg"]
@@ -1383,25 +1623,49 @@ version = "1.4.1+1"
 """
 
 # ╔═╡ Cell order:
-# ╠═58fc8746-79f5-11ee-1840-13e7eb19f6d9
-# ╟─77de6ee3-6225-4a84-80ad-e972702ce599
-# ╟─97edda20-cc50-4979-8b14-3f4cc683147b
-# ╟─a9a6e8f2-62e4-4d75-9243-5bdcb4064ca5
-# ╟─2d697339-389f-4ac6-96ee-949338445936
-# ╟─393f4352-2cf0-4c09-a077-7124e20ab7ef
-# ╟─5760cc7d-3a01-4378-8a34-90354c8b6fcf
-# ╠═7e0f1490-cab0-4b2b-ad14-91bf577dfd36
-# ╠═cfb29296-fae6-4962-9ff7-fa712f98eab9
-# ╟─205db03b-dd18-4e82-99a8-e81972ce720b
-# ╠═d93d0a0a-a6e3-41c3-ac49-20f1352f4246
-# ╟─d68c18bc-9185-4e44-94fe-f914a0b4b690
-# ╠═14823be5-af35-47c1-b71d-2db319572035
-# ╠═9dd85ed3-ba41-4cde-abba-1a045286dc3c
-# ╠═56b739ce-530f-4042-962f-67c8474ab577
-# ╠═22f3e72d-9bf0-4b38-80a0-e0fb526be387
-# ╠═317905e5-d12f-4607-bfa5-8b4c5d4acdff
-# ╠═196e8d99-8648-48dd-bc8f-343088dcd1a0
-# ╟─d1198bc1-3e21-48d5-9316-48eb6d7c715e
-# ╟─91ca4bf9-c0ac-45ca-9cff-633b0ef470e7
+# ╠═34db6036-895a-11ee-177f-81edf47a49f3
+# ╟─1f76d802-7b93-407a-a57d-8b2dcad9c3a9
+# ╟─202dc8f5-d66f-4680-b9d8-9cac9bfe8f12
+# ╟─96a34f7a-7433-42dd-8673-434c95a309e0
+# ╟─b21a27b2-1127-4685-9479-6b87f115ce4b
+# ╟─f4c06f38-4e11-4915-851e-793f725547aa
+# ╠═54ba9057-58b2-4487-a72e-e1d85c4505e2
+# ╟─59ed4c8d-983a-45bf-9fad-b75515b76436
+# ╠═ae5fdcde-4f8c-41a2-917a-97c774064cd6
+# ╟─6c97e45a-a07d-4d56-a4c9-de8124645fd1
+# ╠═31cc0925-a6de-4ddf-b58a-6128b1adab02
+# ╟─d1d73af4-93cb-41ec-ad44-40dd3c3fc5c1
+# ╠═d7b5925c-3f19-48a8-a9f1-b22e4517caee
+# ╟─ab13d080-1f98-448a-a2dd-cd7fc32cf2fb
+# ╠═c8962a31-216a-4272-bfdd-829e3ff336ed
+# ╟─a7b7b018-2dbe-467e-9ff2-9c9eb033eb56
+# ╠═490bb727-4711-4a42-a857-4d93dd9c6913
+# ╠═97561b24-14af-4d81-8e5e-35f7c3d41f88
+# ╠═f4ea8605-042f-497c-a00a-e2dd59e9df58
+# ╠═26a72ac2-e487-4568-bd4b-a6e925e0f4fe
+# ╠═c1bc1360-6128-4f4b-bbf1-606f6d32156f
+# ╟─7b71e97f-6683-4821-ad5b-f5cd9b685e11
+# ╠═c997b5e1-ce34-4be2-b197-98a2d0ea6f09
+# ╠═b9b086a8-b1a1-491e-8147-89aa364afa54
+# ╠═2af22aa6-c2b5-4dce-80d3-e6cc3831c890
+# ╠═20dc7267-7004-4d6a-b434-8d4f41d58177
+# ╠═4f80f0d7-1e4f-4a5d-a8fb-c217f494e5a5
+# ╠═82edf337-fe8e-45b9-8e2e-856b5adb1c01
+# ╠═877e20bf-5a19-404d-b8c0-de608026bfd2
+# ╠═fd6328d2-488b-418d-b4d5-3a8c4ae69b9e
+# ╠═c91eee5d-e4f5-41db-8849-7556697e584d
+# ╠═ce97b5d3-516d-4a40-9d8f-e0141c035f19
+# ╠═8ea825c1-3ef5-43da-afb1-d1f611a40bb0
+# ╠═4e712b88-bbd8-4c26-b533-7bb1ef9ec5f3
+# ╠═3ca4a72d-fb6a-4a57-81fb-7c4fc89ee274
+# ╠═1825b43f-4ae3-42d1-8591-e5b8e7bfe626
+# ╟─100c7385-4599-41f4-b211-061cc7a151ef
+# ╠═91613b95-f857-4316-8a03-6d717a412fd8
+# ╠═26ad8876-2f97-4bfd-87f0-351bc5095f47
+# ╟─a9b85f0c-8c37-491d-801b-bc12acf4f657
+# ╠═d3db386a-3f5c-4684-980c-12710f1c303d
+# ╠═023a639d-4312-4351-aa84-04ac703d904d
+# ╠═0e142e12-55a3-43a3-9bd9-65fb3f8ef85b
+# ╠═8d79f0d0-95b2-4367-abf8-ba6df1dd0608
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002

@@ -91,7 +91,7 @@ $$\lambda_{\mu + m} = ic(\mu + m) \pm ic_0 (\mu + m)$$
 where "
 
 # ╔═╡ e3a9db1c-3387-4a39-9c97-c5a44c7f576a
-md"m = $(@bind m PlutoUI.Slider(1:100, show_value = true, default=1))"
+md"m = $(@bind m PlutoUI.Slider(1:5, show_value = true, default=1))"
 
 # ╔═╡ 5fe20173-ce5d-4cbd-860d-f36833c1fdeb
 begin
@@ -276,8 +276,39 @@ function Bg(N, z)
 	return B
 end
 
+# ╔═╡ 2f4b4efd-a892-4797-a9f1-e5f94222af33
+function Btest(N, z)
+
+	# initialize matrix
+	B = zeros(2*N+1, 2*N+1) .+ 0.0im
+
+	# loop over index to populate matrix
+	for mm = 1:(2*N+1)
+
+		for jj = 1:(2*N+1)
+
+			# working with both code and matrix indicies
+			m = mm - 1
+			j = jj - 1
+	
+			# define integrand specifc to matrix
+			term = -1
+			
+			# populate matrix entries
+			B[jj,mm] =  1/(2*π) .* trapz(z,term .* exp.(- im .* (m-j) .* z))
+
+		end
+
+	end
+	
+	return B
+end
+
 # ╔═╡ 1eabaff3-9776-4280-a4dc-5686441544f4
 Bg(N, z)
+
+# ╔═╡ 17fa2078-d17e-43b6-89e9-cc4396582676
+real(Btest(N,z))
 
 # ╔═╡ 25073141-5264-480a-9425-08ee4208bd1a
 md"Should B even be all -1?"
@@ -368,11 +399,11 @@ function Cg(N, z, S0, b, μ)
 	for mm = 1:(2*N + 1)
 
 		# converting from code to matrix index
-		m = mm 
+		m = mm - 1
 
 		for jj = 1:(2*N + 1)
 
-			j = jj 
+			j = jj - 1 
 
 			k = m .+ μ
 
@@ -1605,8 +1636,10 @@ version = "1.4.1+1"
 # ╟─191f060d-4302-4b18-82f8-6e20224ee201
 # ╟─9bc57aaf-5cba-4569-975c-a504730b8008
 # ╠═4ee55b92-512b-431e-9973-d0c283aa13d2
-# ╟─8d7afa78-57ae-4fb9-8899-4254f22a11f8
-# ╟─1eabaff3-9776-4280-a4dc-5686441544f4
+# ╠═8d7afa78-57ae-4fb9-8899-4254f22a11f8
+# ╠═2f4b4efd-a892-4797-a9f1-e5f94222af33
+# ╠═1eabaff3-9776-4280-a4dc-5686441544f4
+# ╠═17fa2078-d17e-43b6-89e9-cc4396582676
 # ╟─25073141-5264-480a-9425-08ee4208bd1a
 # ╠═5ec63fde-9d89-428e-9efa-a9c4d43104ba
 # ╟─c2ec1e3a-7ed5-43de-867a-bfa2f25de5af
@@ -1614,7 +1647,7 @@ version = "1.4.1+1"
 # ╟─0b757a49-b1a3-4d6d-b482-fe7adce2c499
 # ╠═73828383-6b1f-4f8b-ab22-b2c5e1f581a0
 # ╟─b676b7ee-9d47-41dd-a80d-60fa8556a38e
-# ╟─9c6745e6-0757-43f4-89da-ae6b04b1803c
+# ╠═9c6745e6-0757-43f4-89da-ae6b04b1803c
 # ╠═39d542a2-0ecb-4ed0-b0cf-4eca6bd67094
 # ╟─c75a4af4-ec70-41ae-848b-0d4464047936
 # ╠═8c00452c-2585-4edc-9ed6-b5befaa7991d
