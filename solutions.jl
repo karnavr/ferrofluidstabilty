@@ -4,13 +4,26 @@
 using Markdown
 using InteractiveUtils
 
+# This Pluto notebook uses @bind for interactivity. When running this notebook outside of Pluto, the following 'mock version' of @bind gives bound variables a default value (instead of an error).
+macro bind(def, element)
+    quote
+        local iv = try Base.loaded_modules[Base.PkgId(Base.UUID("6e696c72-6542-2067-7265-42206c756150"), "AbstractPlutoDingetjes")].Bonds.initial_value catch; b -> missing; end
+        local el = $(esc(element))
+        global $(esc(def)) = Core.applicable(Base.get, el) ? Base.get(el) : iv(el)
+        el
+    end
+end
+
 # ╔═╡ 58fc8746-79f5-11ee-1840-13e7eb19f6d9
 begin
 	using Plots
 	using SpecialFunctions
 	using Optim
+	using NLsolve
 	using LaTeXStrings
 	using Trapz
+	using ProgressLogging
+	using LinearAlgebra
 	using PlutoUI
 	TableOfContents()
 end
@@ -19,7 +32,7 @@ end
 md"## Waves on a Ferrofluid Jet"
 
 # ╔═╡ 97edda20-cc50-4979-8b14-3f4cc683147b
-md"##### Helper function definitions"
+md"##### Helper functions"
 
 # ╔═╡ 2d697339-389f-4ac6-96ee-949338445936
 function β(n, k, b, S0)
@@ -60,6 +73,72 @@ function fourierToReal(coefficients, domain)
     return S, Sz, Szz
 end
 
+# ╔═╡ 6ee58b6f-9706-4575-801d-169c8cef9cf3
+md"##### Solvers"
+
+# ╔═╡ 95e6299b-70da-4a6d-af6b-b810cb80cd5e
+function finite_diff_jacobian(f, x)
+    h = 1e-8  # Small perturbation
+    n = length(x)
+    J = zeros(n, n)
+    fx = f(x)
+    for i in 1:n
+        x_perturbed = copy(x)
+        x_perturbed[i] += h
+        J[:, i] = (f(x_perturbed) - fx) / h
+    end
+    return J
+end
+
+# ╔═╡ eaf2076b-952e-4d0b-89bc-9b9aa73fc31d
+function mySolver(f, initial_guess, solver = :Newton)
+
+	if solver == :Newton
+
+		tol = 1e-7  # Tolerance for convergence
+	    max_iter = 100  # Maximum number of iterations
+	    x = initial_guess
+	    for i in 1:max_iter
+	        J = finite_diff_jacobian(f, x)
+	        delta_x = -J \ f(x)  # Newton's update step
+	        x += delta_x
+	        if norm(delta_x) < tol  # Check for convergence
+	            return x
+	        end
+	    end
+	    error("Failed to converge after $max_iter iterations")
+
+	elseif solver == :NewtonRaphson 
+
+		tol = 10e-8  # Tolerance for convergence
+	    max_iter = 1000  # Maximum number of iterations
+	    alpha = 1.0  # Initial step size
+	    c = 1e-4  # Sufficient decrease parameter
+	    rho = 0.5  # Step size reduction factor
+	
+	    x = initial_guess
+	    for i in 1:max_iter
+	        J = finite_diff_jacobian(f, x)
+	        delta_x = -J \ f(x)  # Newton's update step
+	        t = 1.0  # Initialize step size
+	
+	        # Backtracking line search
+	        while norm(f(x + t * delta_x)) > norm(f(x)) + c * t * dot(f(x), delta_x)
+	            t *= rho
+	        end
+	
+	        x += t * delta_x  # Update with the found step size
+	        if norm(delta_x) < tol  # Check for convergence
+	            return x
+	        end
+	    end
+	    error("Failed to converge after $max_iter iterations")
+
+	else
+		error("Enter which algorithm you want to use!")
+	end
+end
+
 # ╔═╡ 5760cc7d-3a01-4378-8a34-90354c8b6fcf
 md"##### Domain and problem constants"
 
@@ -67,7 +146,7 @@ md"##### Domain and problem constants"
 begin
 	# domain constants + domain
 	L = π
-	N = 36
+	N = 36 					  # number of modes for solution S(z)
 	
 	dz = 2*L/(2*N+1)
 	z = collect(-L:dz:L)      # 2N + 2 points
@@ -79,127 +158,160 @@ begin
 	E = 1 - B/2; nothing
 end
 
+# ╔═╡ 8a39570b-3825-4750-a9b3-c0917d5c7c41
+md"Define the extent and values of the bifurcation parameter $a_1$:"
+
 # ╔═╡ cfb29296-fae6-4962-9ff7-fa712f98eab9
 begin
-	# define the branch extent
-	branchPoints = 100
+	# branchN = 100
+	# a1Vals = collect(range(0.001, 0.19, branchN + 1))
 
-	a1_vals = collect(range(0.001,0.33, branchPoints+1))
+	a1Vals = collect(0.001:3e-3:0.4)
+	branchN = Int(length(a1Vals)); nothing
 end
 
 # ╔═╡ 205db03b-dd18-4e82-99a8-e81972ce720b
-md"Now let's initialize the solution arrays"
+md"Now let's initialize the solution array:"
 
-# ╔═╡ d93d0a0a-a6e3-41c3-ac49-20f1352f4246
-begin
-	c = zeros(branchPoints)
-	coeff_sols = zeros(branchPoints, N+1)
-	
-	solutions = zeros(branchPoints, N+2); nothing
-end
-
-# ╔═╡ d68c18bc-9185-4e44-94fe-f914a0b4b690
-md"Create the first initial guess"
+# ╔═╡ 61615a15-1e1f-401f-952d-5b49c549b1e3
+solutions = zeros(branchN, N+2)
 
 # ╔═╡ 14823be5-af35-47c1-b71d-2db319572035
 begin
 	k1 = 1
-	c0other = sqrt(1/(k1).*(besseli(1,k1)*besselk(1,k1*b)-besseli(1,k1*b)*besselk(1,k1))./(besseli(1,k1*b)*besselk(0,k1)+besseli(0,k1)*besselk(1,k1*b)).*(k1^2-1+B))
+	cInitial = c0(k1, b, B); nothing
 
 	# cstar = sqrt(c0other^2 + (2-B)); c0 = cstar;
 end
 
+# ╔═╡ d68c18bc-9185-4e44-94fe-f914a0b4b690
+md"Create the first initial guess, corresponding to the smallest amplitude waves, $a_1$ = $(a1Vals[1])
+
+and wave speed $c_0$ = $(cInitial)"
+
 # ╔═╡ 9dd85ed3-ba41-4cde-abba-1a045286dc3c
 begin
-	initial_guess = (1e-10).*ones(branchPoints+1, N+2)
-	initial_guess[1,1:5] = [c0other, 1.0, a1_vals[1], 1e-10, 1e-10]
-	initial_guess
+	initial_guess = (1e-10).*ones(branchN+1, N+2)
+	initial_guess[1,1:4] = [cInitial, 1.0, a1Vals[1], 1e-10]
+	initial_guess[1,:]
 end
+
+# ╔═╡ 20e2586b-6e38-4649-9e31-57823ccafb5c
+md"Visualize the intial guess:"
+
+# ╔═╡ eae01aa3-b324-428d-9b99-f325408f4fe5
+begin
+	S, Sz, Szz = fourierToReal(initial_guess[1,2:end], z) 
+	scatter(z, S, label = "intial guess")
+	xlabel!("z"); ylabel!("S(z)")
+end
+
+# ╔═╡ 30134931-5c28-45cb-a77f-92d30c7a032e
+md"Define a function that returns the $N + 2$ equations that we want to solve for: "
 
 # ╔═╡ 22f3e72d-9bf0-4b38-80a0-e0fb526be387
-function equations(unknowns, z, N, b, B, E, amp1, amp0)
+function equations(unknowns::Vector{Float64}, z::Vector{Float64}, N::Int64, b::Float64, B::Float64, E::Float64, amp1::Float64, amp0::Float64)
 
-	c = unknowns[1];
-	coeffs = unknowns[2:N+2]; # N + 1
-	
-	a0 = coeffs[1];
-	a1 = coeffs[2];
-	
-	# let's assume S is made of cosine modes
-	S = a0
-	Sz = 0
-	Szz = 0
+	c = unknowns[1]
+	coeffs = unknowns[2:N+2] # N + 1 coeffs
 
-	for i = 1:(length(coeffs) - 1)
-		S = S .+ coeffs[i+1] .* cos.(i.*z);
-		Sz = Sz .- i .* coeffs[i+1].*sin.(i.*z);
-		Szz = Szz .- i.^2 .* coeffs[i+1].*cos.(i.*z);
-	end
-	
-	Szsq = 1 .+ (Sz.^2); # commonly used value in eqs
-	
+	a0 = coeffs[1]
+	a1 = coeffs[2]
+
+	S, Sz, Szz = fourierToReal(coeffs, z)
+
+	integrands = zeros(N, length(z)) # N integrands for k = 1:N
+	integrals = zeros(N) # N integrals (array gets condensed on the z-axis)
+	eqs = zeros(N+2) # integrands + 2 extra equations I define later
+
+	# define common factors in equations 
+	Szsq = 1 .+ (Sz.^2);
+
 	one_p = (Szsq).*((c.^2)./2 .- 1 ./ (S.*sqrt.(Szsq)) .+ Szz./(Szsq.^(3/2)) .+ B./(2 .* S.^2) .+ E);
-	
-	integrand = zeros(N,length(z));
-	integral = zeros(N);
-	eqns = zeros(N+2);
-	
+
 	for k = 1:N
-	    one = k .* S .* sqrt.(one_p)
+	    one = k .* S .* sqrt.(Complex.(one_p))
 	    two = besselk.(1, k * b) .* besseli.(1, k .* S) .- besseli.(1, k * b) .* besselk.(1, k .* S)
 		
-	    integrand[k, :] = one .* two
+	    integrands[k, :] = one .* two
 		
 	    # Normalize the integrand before integration to prevent numerical issues
-	    integrand[k, :] ./= maximum(abs.(integrand[k, :]))
-	    integral[k] = trapz(z, integrand[k, :] .* cos.(k .* z))
+	    integrands[k, :] ./= maximum(abs.(integrands[k, :]))
+	    integrals[k] = trapz(z, integrands[k, :] .* cos.(k .* z))
 	end
+
+	eqs[1:N] = real.(integrals)
+	eqs[N+1] = abs(a0 - amp0)
+	eqs[N+2] = abs(a1 - amp1)
+
+	return eqs
 	
-	eqns[1:N] .= real.(integral)
-	eqns[N+1] = abs(a0 - amp0)
-	eqns[N+2] = abs(a1 - amp1)
-	
-	    return eqns
 end
 
-# ╔═╡ 56b739ce-530f-4042-962f-67c8474ab577
-for i = 1:branchPoints
+# ╔═╡ daf5f8ab-7c11-4d04-8dc9-6f7d18f49671
+md"And now let's solve the system from $a_1$ = $(a1Vals[1]) to $(a1Vals[end])."
 
-    # solve the system
-    result = optimize(X -> equations(X, z, N, b, B, E, initial_guess[i,3], 1), initial_guess[i,:], Newton())
+# ╔═╡ b2862a0f-c747-4bdc-b943-a189071086ee
+begin
+	@progress for i = 1:branchN
 
-    # capture current solution
-    X = Optim.minimizer(result)
-	
-    solutions[i,:] = X
-	
-    c[i] = X[1]
-    coeff_sols[i,:] = X[2:end]  # N + 1
-    
-    # update initial guess
-    initial_guess[i+1,:] = solutions[i,:]
+		f(unkno::Vector{Float64}) = equations(unkno, z, N, b, B, E, a1Vals[i], 1.0)
 
-	loops += 1
+		# solve for the current branch point + capture
+		solutions[i,:] = mySolver(f, initial_guess[i,:])
+
+		# update intial guess 
+		initial_guess[i+1,:] = solutions[i,:]
+		
+	end
 end
 
-# ╔═╡ 317905e5-d12f-4607-bfa5-8b4c5d4acdff
-# begin
-# 	# convert solutions from fourier to real
-# 	S = zeros(branchPoints, length(z))
-# 	infnorms = zeros(branchPoints)
-	
-# 	for i = 1:branchPoints
-# 	    for k = 0:N
-# 	        S[i,:] .+= coeff_sols[i, k+1] .* cos.(k.*z)
-# 	    end
-	    
-# 	    # compute infinity norms
-# 	    infnorms[i] = maximum(abs.(S[i,:] .- 1))
-# 	end
-# end
+# ╔═╡ 21ba44c9-f70c-46b4-8ef6-4d37a6f0ffc1
+md"Now extract the solution speeds and Fourier coeffs, and also convert them to profiles."
 
-# ╔═╡ 196e8d99-8648-48dd-bc8f-343088dcd1a0
-equations(initial_guess[1,:], z, N, b, B, E, 0.001, 1.0)
+# ╔═╡ bb761d05-d6b3-4c9d-b8e2-aedcf5885e93
+begin
+	# extract the solution speeds and coeffs 
+	solcoeffs = solutions[:,2:end]
+	solspeeds = solutions[:,1]; nothing
+end
+
+# ╔═╡ 2166a747-af03-47a0-89fd-11e82edd6d92
+begin
+	# convert profiles + extract speeds
+	profiles = zeros(branchN,length(z))
+
+	for i = 1:branchN
+		profiles[i,:] .= fourierToReal(solcoeffs[i,:], z)[1]
+	end
+
+	# reflect profiles 
+	solprofiles = [profiles[:,Int(end/2):end] profiles[:,1:Int(end/2)-1]]; nothing
+end
+
+# ╔═╡ 8a88d8d1-c9cd-46ab-b02a-ef18403374e2
+md"index = $(@bind pindex PlutoUI.Slider(1:branchN, show_value = true, default=1))"
+
+# ╔═╡ 2d46a550-d1f1-46eb-8a8f-1a6d53570ddb
+begin
+	# plot profiles 
+	profile_plot = plot(z, solprofiles[pindex,:], legend=false, title = "a1 = $(round(solcoeffs[pindex,2], digits=3))", lw=2)
+	ylims!(0.45,1.3)
+	xlabel!(L"z"); ylabel!(L"S")
+
+	# plot coeffs 
+	first_coeff = 0
+	coeff_plot = scatter(abs.(solcoeffs[pindex,first_coeff+1:end]), legend=false, title="k = $(pindex)", xticks = :all, yaxis=:log)
+	xlabel!("a$(first_coeff) to a$(length(solcoeffs[1,:])-1)")
+
+	# plot branch
+	branch_plot = scatter(solspeeds[1:pindex], solcoeffs[1:pindex,2], legend = false, markersize=4)
+	xlabel!(L"c"); ylabel!(L"a_1")
+	xlims!(0.73,0.82); ylims!(0.04,0.34)
+	
+	plot(profile_plot, branch_plot, size=(700,350))
+	# plot(profile_plot, coeff_plot, size=(700,350))
+end
 
 # ╔═╡ d1198bc1-3e21-48d5-9316-48eb6d7c715e
 md"### Periodic Waves"
@@ -211,17 +323,22 @@ md"### Wilton Ripples"
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
 LaTeXStrings = "b964fa9f-0449-5b57-a5c2-d3ea65f4040f"
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+NLsolve = "2774e3e8-f4cf-5e23-947b-6d7e65073b56"
 Optim = "429524aa-4258-5aef-a3af-852621145aeb"
 Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
 PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
+ProgressLogging = "33c8b6b6-d38a-422a-b730-caa89a2f386c"
 SpecialFunctions = "276daf66-3868-5448-9aa4-cd146d93841b"
 Trapz = "592b5752-818d-11e9-1e9a-2b8ca4a44cd1"
 
 [compat]
 LaTeXStrings = "~1.3.1"
+NLsolve = "~4.5.1"
 Optim = "~1.7.8"
 Plots = "~1.39.0"
 PlutoUI = "~0.7.52"
+ProgressLogging = "~0.1.4"
 SpecialFunctions = "~2.3.1"
 Trapz = "~2.0.3"
 """
@@ -382,6 +499,12 @@ deps = ["IrrationalConstants", "LogExpFunctions", "NaNMath", "Random", "SpecialF
 git-tree-sha1 = "23163d55f885173722d1e4cf0f6110cdbaf7e272"
 uuid = "b552c78f-8df3-52c6-915a-8e097449b14b"
 version = "1.15.1"
+
+[[deps.Distances]]
+deps = ["LinearAlgebra", "SparseArrays", "Statistics", "StatsAPI"]
+git-tree-sha1 = "5225c965635d8c21168e32a12954675e7bea1151"
+uuid = "b4f34e82-e78d-54a5-968a-f98e89d6e8f7"
+version = "0.10.10"
 
 [[deps.Distributed]]
 deps = ["Random", "Serialization", "Sockets"]
@@ -764,6 +887,12 @@ git-tree-sha1 = "a0b464d183da839699f4c79e7606d9d186ec172c"
 uuid = "d41bc354-129a-5804-8e4c-c37616107c6c"
 version = "7.8.3"
 
+[[deps.NLsolve]]
+deps = ["Distances", "LineSearches", "LinearAlgebra", "NLSolversBase", "Printf", "Reexport"]
+git-tree-sha1 = "019f12e9a1a7880459d0173c182e6a99365d7ac1"
+uuid = "2774e3e8-f4cf-5e23-947b-6d7e65073b56"
+version = "4.5.1"
+
 [[deps.NaNMath]]
 deps = ["OpenLibm_jll"]
 git-tree-sha1 = "0877504529a3e5c3343c6f8b4c0381e57e4387e4"
@@ -898,6 +1027,12 @@ version = "1.4.1"
 [[deps.Printf]]
 deps = ["Unicode"]
 uuid = "de0858da-6303-5e67-8744-51eddeeeb8d7"
+
+[[deps.ProgressLogging]]
+deps = ["Logging", "SHA", "UUIDs"]
+git-tree-sha1 = "80d919dee55b9c50e8d9e2da5eeafff3fe58b539"
+uuid = "33c8b6b6-d38a-422a-b730-caa89a2f386c"
+version = "0.1.4"
 
 [[deps.Qt6Base_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "Fontconfig_jll", "Glib_jll", "JLLWrappers", "Libdl", "Libglvnd_jll", "OpenSSL_jll", "Vulkan_Loader_jll", "Xorg_libSM_jll", "Xorg_libXext_jll", "Xorg_libXrender_jll", "Xorg_libxcb_jll", "Xorg_xcb_util_cursor_jll", "Xorg_xcb_util_image_jll", "Xorg_xcb_util_keysyms_jll", "Xorg_xcb_util_renderutil_jll", "Xorg_xcb_util_wm_jll", "Zlib_jll", "libinput_jll", "xkbcommon_jll"]
@@ -1389,18 +1524,29 @@ version = "1.4.1+1"
 # ╟─a9a6e8f2-62e4-4d75-9243-5bdcb4064ca5
 # ╟─2d697339-389f-4ac6-96ee-949338445936
 # ╟─393f4352-2cf0-4c09-a077-7124e20ab7ef
+# ╟─6ee58b6f-9706-4575-801d-169c8cef9cf3
+# ╟─eaf2076b-952e-4d0b-89bc-9b9aa73fc31d
+# ╟─95e6299b-70da-4a6d-af6b-b810cb80cd5e
 # ╟─5760cc7d-3a01-4378-8a34-90354c8b6fcf
 # ╠═7e0f1490-cab0-4b2b-ad14-91bf577dfd36
+# ╟─8a39570b-3825-4750-a9b3-c0917d5c7c41
 # ╠═cfb29296-fae6-4962-9ff7-fa712f98eab9
-# ╟─205db03b-dd18-4e82-99a8-e81972ce720b
-# ╠═d93d0a0a-a6e3-41c3-ac49-20f1352f4246
+# ╠═205db03b-dd18-4e82-99a8-e81972ce720b
+# ╠═61615a15-1e1f-401f-952d-5b49c549b1e3
 # ╟─d68c18bc-9185-4e44-94fe-f914a0b4b690
 # ╠═14823be5-af35-47c1-b71d-2db319572035
 # ╠═9dd85ed3-ba41-4cde-abba-1a045286dc3c
-# ╠═56b739ce-530f-4042-962f-67c8474ab577
-# ╠═22f3e72d-9bf0-4b38-80a0-e0fb526be387
-# ╠═317905e5-d12f-4607-bfa5-8b4c5d4acdff
-# ╠═196e8d99-8648-48dd-bc8f-343088dcd1a0
+# ╟─20e2586b-6e38-4649-9e31-57823ccafb5c
+# ╠═eae01aa3-b324-428d-9b99-f325408f4fe5
+# ╟─30134931-5c28-45cb-a77f-92d30c7a032e
+# ╟─22f3e72d-9bf0-4b38-80a0-e0fb526be387
+# ╟─daf5f8ab-7c11-4d04-8dc9-6f7d18f49671
+# ╠═b2862a0f-c747-4bdc-b943-a189071086ee
+# ╟─21ba44c9-f70c-46b4-8ef6-4d37a6f0ffc1
+# ╠═bb761d05-d6b3-4c9d-b8e2-aedcf5885e93
+# ╠═2166a747-af03-47a0-89fd-11e82edd6d92
+# ╟─8a88d8d1-c9cd-46ab-b02a-ef18403374e2
+# ╠═2d46a550-d1f1-46eb-8a8f-1a6d53570ddb
 # ╟─d1198bc1-3e21-48d5-9316-48eb6d7c715e
 # ╟─91ca4bf9-c0ac-45ca-9cff-633b0ef470e7
 # ╟─00000000-0000-0000-0000-000000000001
