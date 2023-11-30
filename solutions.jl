@@ -34,7 +34,7 @@ md"# Waves on a Ferrofluid Jet
 Solving for travelling waves on an axisymmetric jet of ferrofluid."
 
 # ╔═╡ eb11bd85-5209-4128-becf-19de7a1d5ca3
-md"## Function Definitions"
+md"## Function definitions"
 
 # ╔═╡ 97edda20-cc50-4979-8b14-3f4cc683147b
 md"##### Helper functions"
@@ -145,6 +145,31 @@ end
 
 # ╔═╡ 59a615a4-e6ca-40ef-bbde-2890269ee3d0
 md"###### Let's also create a custom struct for our problem constants"
+
+# ╔═╡ 812baaef-b066-46e8-8c4d-e9cfb41cd171
+struct Constants
+	N::Int64
+	L::Number
+	
+	# domain definition
+	dz::Float64
+    z::Vector{Float64}
+
+	# magnetic constants 
+	B::Float64
+	b::Float64
+    E::Float64
+	
+	
+	function Constants(N::Int64, L::Number, B::Float64, b::Float64)
+        dz = 2*L / (2*N+1)
+        z = collect(-L:dz:L)
+		
+        E = 1 - B/2
+
+        new(N, L, dz, z, B, b, E)
+    end
+end
 
 # ╔═╡ 690898d4-9dc4-42c9-a9fe-b0c42dac4b76
 md"## Periodic wave solutions"
@@ -326,13 +351,13 @@ end
 md"### Comparison with `MATLAB` results"
 
 # ╔═╡ d1198bc1-3e21-48d5-9316-48eb6d7c715e
-md"## More periodic Waves"
+md"## More periodic waves"
 
 # ╔═╡ 91ca4bf9-c0ac-45ca-9cff-633b0ef470e7
-md"## Wilton Ripples"
+md"## Wilton ripples"
 
 # ╔═╡ 0e0214d9-bccb-4750-9073-70a0e4f3bec0
-md"## Solitary Waves"
+md"## Solitary waves"
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -1544,6 +1569,7 @@ version = "1.4.1+1"
 # ╟─eaf2076b-952e-4d0b-89bc-9b9aa73fc31d
 # ╟─95e6299b-70da-4a6d-af6b-b810cb80cd5e
 # ╟─59a615a4-e6ca-40ef-bbde-2890269ee3d0
+# ╠═812baaef-b066-46e8-8c4d-e9cfb41cd171
 # ╟─690898d4-9dc4-42c9-a9fe-b0c42dac4b76
 # ╟─5760cc7d-3a01-4378-8a34-90354c8b6fcf
 # ╠═7e0f1490-cab0-4b2b-ad14-91bf577dfd36
@@ -1555,7 +1581,7 @@ version = "1.4.1+1"
 # ╟─20e2586b-6e38-4649-9e31-57823ccafb5c
 # ╠═eae01aa3-b324-428d-9b99-f325408f4fe5
 # ╟─30134931-5c28-45cb-a77f-92d30c7a032e
-# ╟─22f3e72d-9bf0-4b38-80a0-e0fb526be387
+# ╠═22f3e72d-9bf0-4b38-80a0-e0fb526be387
 # ╟─daf5f8ab-7c11-4d04-8dc9-6f7d18f49671
 # ╠═b2862a0f-c747-4bdc-b943-a189071086ee
 # ╟─21ba44c9-f70c-46b4-8ef6-4d37a6f0ffc1
