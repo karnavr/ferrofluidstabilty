@@ -59,7 +59,7 @@ function c0(k, b, B)
 end
 
 # ╔═╡ 393f4352-2cf0-4c09-a077-7124e20ab7ef
-function fourierToReal(coefficients, domain)
+function fourierSeries(coefficients, domain, L)
     N = length(coefficients) - 1
     S = zeros(length(domain))  # Profile S
     Sz = zeros(length(domain))  # First derivative Sz
@@ -68,11 +68,16 @@ function fourierToReal(coefficients, domain)
     for (i, x) in enumerate(domain)
         # Calculate the series and its derivatives at each point x
         S[i] = coefficients[1] 
+		
         for n in 1:N
-            S[i] += coefficients[n + 1] * cos(n * x)
-            Sz[i] -= n * coefficients[n + 1] * sin(n * x)
-            Szz[i] -= n^2 * coefficients[n + 1] * cos(n * x)
+
+			k = n*π/L
+
+            S[i] += coefficients[n + 1] * cos(k * x)
+            Sz[i] -= k * coefficients[n + 1] * sin(k * x)
+            Szz[i] -= k^2 * coefficients[n + 1] * cos(k * x)
         end
+		
     end
 
     return S, Sz, Szz
@@ -230,7 +235,7 @@ md"Visualize the intial guess:"
 
 # ╔═╡ eae01aa3-b324-428d-9b99-f325408f4fe5
 begin
-	S, Sz, Szz = fourierToReal(initial_guess[1,2:end], z) 
+	S, Sz, Szz = fourierSeries(initial_guess[1,2:end], z, L) 
 	scatter(z, S, label = "intial guess")
 	xlabel!("z"); ylabel!("S(z)")
 end
@@ -239,7 +244,7 @@ end
 md"Define a function that returns the $N + 2$ equations that we want to solve for: "
 
 # ╔═╡ 22f3e72d-9bf0-4b38-80a0-e0fb526be387
-function equations(unknowns::Vector{Float64}, z::Vector{Float64}, N::Int64, b::Float64, B::Float64, E::Float64, amp1::Float64, amp0::Float64)
+function equations(unknowns::Vector{Float64}, z::Vector{Float64}, N::Int64, b::Float64, B::Float64, E::Float64, L::Number, a₁::Float64, a₀::Float64)
 
 	c = unknowns[1]
 	coeffs = unknowns[2:N+2] # N + 1 coeffs
@@ -247,7 +252,7 @@ function equations(unknowns::Vector{Float64}, z::Vector{Float64}, N::Int64, b::F
 	a0 = coeffs[1]
 	a1 = coeffs[2]
 
-	S, Sz, Szz = fourierToReal(coeffs, z)
+	S, Sz, Szz = fourierSeries(coeffs, z, L)
 
 	integrands = zeros(N, length(z)) # N integrands for k = 1:N
 	integrals = zeros(N) # N integrals (array gets condensed on the z-axis)
@@ -258,20 +263,23 @@ function equations(unknowns::Vector{Float64}, z::Vector{Float64}, N::Int64, b::F
 
 	one_p = (Szsq).*((c.^2)./2 .- 1 ./ (S.*sqrt.(Szsq)) .+ Szz./(Szsq.^(3/2)) .+ B./(2 .* S.^2) .+ E);
 
-	for k = 1:N
+	for n = 1:N
+
+		k = n*π/L 
+		
 	    one = k .* S .* sqrt.(Complex.(one_p))
 	    two = besselk.(1, k * b) .* besseli.(1, k .* S) .- besseli.(1, k * b) .* besselk.(1, k .* S)
 		
-	    integrands[k, :] = real.(one .* two)
+	    integrands[n, :] = real.(one .* two)
 		
 	    # Normalize the integrand before integration to prevent numerical issues
-	    integrands[k, :] ./= maximum(abs.(integrands[k, :]))
-	    integrals[k] = trapz(z, integrands[k, :] .* cos.(k .* z))
+	    integrands[n, :] ./= maximum(abs.(integrands[n, :]))
+	    integrals[n] = trapz(z, integrands[n, :] .* cos.(k .* z))
 	end
 
 	eqs[1:N] = real.(integrals)
-	eqs[N+1] = abs(a0 - amp0)
-	eqs[N+2] = abs(a1 - amp1)
+	eqs[N+1] = abs(a0 - a₀)
+	eqs[N+2] = abs(a1 - a₁)
 
 	return eqs
 	
@@ -288,7 +296,7 @@ begin
 	
 	@progress for i = 1:branchN
 
-		f(unkno::Vector{Float64}) = equations(unkno, z, N, b, B, E, a1Vals[i], 1.0)
+		f(unkno::Vector{Float64}) = equations(unkno, z, N, b, B, E, L, a1Vals[i], 1.0)
 
 		# solve for the current branch point + capture
 		solutions[i,:] = mySolver(f, initial_guess[i,:])
@@ -315,7 +323,7 @@ begin
 
 	# convert profiles
 	for i = 1:branchN
-		profiles[i,:] .= fourierToReal(solcoeffs[i,:], z)[1]
+		profiles[i,:] .= fourierSeries(solcoeffs[i,:], z, L)[1]
 	end
 
 	# reflect profiles 
@@ -335,7 +343,7 @@ begin
 
 	# plot coeffs 
 	first_coeff = 0
-	coeff_plot = scatter(abs.(solcoeffs[pindex,first_coeff+1:end]), legend=false, title="k = $(pindex)", xticks = :all, yaxis=:log)
+	coeff_plot = scatter(abs.(solcoeffs[pindex,first_coeff+1:end]), legend=false, title="k = $(round(pindex*π/L))", xticks = :all, yaxis=:log)
 	xlabel!("a$(first_coeff) to a$(length(solcoeffs[1,:])-1)")
 
 	# plot branch
@@ -1562,9 +1570,9 @@ version = "1.4.1+1"
 # ╟─77de6ee3-6225-4a84-80ad-e972702ce599
 # ╟─eb11bd85-5209-4128-becf-19de7a1d5ca3
 # ╟─97edda20-cc50-4979-8b14-3f4cc683147b
-# ╟─a9a6e8f2-62e4-4d75-9243-5bdcb4064ca5
+# ╠═a9a6e8f2-62e4-4d75-9243-5bdcb4064ca5
 # ╟─2d697339-389f-4ac6-96ee-949338445936
-# ╟─393f4352-2cf0-4c09-a077-7124e20ab7ef
+# ╠═393f4352-2cf0-4c09-a077-7124e20ab7ef
 # ╟─6ee58b6f-9706-4575-801d-169c8cef9cf3
 # ╟─eaf2076b-952e-4d0b-89bc-9b9aa73fc31d
 # ╟─95e6299b-70da-4a6d-af6b-b810cb80cd5e
