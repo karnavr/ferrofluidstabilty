@@ -161,7 +161,7 @@ struct Constants
 	
 	# domain definition
 	dz::Float64 				# domain spacing
-    z::Vector{Float64} 			# domain vector of values 
+    z::Vector{Float64} 			# domain vector of values (2N + 2 ponts)
 
 	# magnetic constants 
 	B::Float64 					# Bond number 
@@ -186,20 +186,7 @@ md"## Periodic wave solutions"
 md"##### Domain and problem constants"
 
 # ╔═╡ 7e0f1490-cab0-4b2b-ad14-91bf577dfd36
-begin
-	# domain constants + domain
-	L = π
-	N = 32 					  # number of modes for solution S(z)
-	
-	dz = 2*L/(2*N+1)
-	z = collect(-L:dz:L)      # 2N + 2 points
-	
-	# define magnetic constants
-	B = 1.5
-	b = 0.1
-	
-	E = 1 - B/2; nothing
-end
+constants = Constants(16,π,1.5,0.1)
 
 # ╔═╡ 8a39570b-3825-4750-a9b3-c0917d5c7c41
 md"Define the extent and values of the bifurcation parameter $a_1$:"
@@ -215,8 +202,8 @@ end
 
 # ╔═╡ 14823be5-af35-47c1-b71d-2db319572035
 begin
-	k1 = 1
-	cInitial = c0(k1, b, B); nothing
+	k1 = 1*π/constants.L
+	cInitial = c0(k1, constants.b, constants.B); nothing
 
 	# cstar = sqrt(c0other^2 + (2-B)); c0 = cstar;
 end
@@ -228,7 +215,7 @@ and wave speed $c_0$ = $(cInitial)"
 
 # ╔═╡ 9dd85ed3-ba41-4cde-abba-1a045286dc3c
 begin
-	initial_guess = (1e-10).*ones(branchN+1, N+2)
+	initial_guess = (1e-10).*ones(branchN+1, constants.N+2)
 	initial_guess[1,1:4] = [cInitial, 1.0, a1Vals[1], 1e-10]
 	initial_guess[1,:]
 end
@@ -238,8 +225,8 @@ md"Visualize the intial guess:"
 
 # ╔═╡ eae01aa3-b324-428d-9b99-f325408f4fe5
 begin
-	S, Sz, Szz = fourierSeries(initial_guess[1,2:end], z, L) 
-	scatter(z, S, label = "intial guess")
+	S, Sz, Szz = fourierSeries(initial_guess[1,2:end], constants.z, constants.L) 
+	scatter(constants.z, S, label = "intial guess")
 	xlabel!("z"); ylabel!("S(z)")
 end
 
@@ -247,7 +234,15 @@ end
 md"Define a function that returns the $N + 2$ equations that we want to solve for: "
 
 # ╔═╡ 22f3e72d-9bf0-4b38-80a0-e0fb526be387
-function equations(unknowns::Vector{Float64}, z::Vector{Float64}, N::Int64, b::Float64, B::Float64, E::Float64, L::Number, a₁::Float64, a₀::Float64)
+function equations(unknowns::Vector{Float64}, constants::Constants, a₁::Float64, a₀::Float64)
+
+	# problem constants 
+	z = constants.z
+	N = constants.N
+	B = constants.B
+	b = constants.b
+	E = constants.E
+	L = constants.L
 
 	c = unknowns[1]
 	coeffs = unknowns[2:N+2] # N + 1 coeffs
@@ -295,11 +290,11 @@ md"And now let's solve the system from $a_1$ = $(a1Vals[1]) to $(a1Vals[end])."
 begin
 
 	# initialize solution array
-	solutions = zeros(branchN, N+2)
+	solutions = zeros(branchN, constants.N+2)
 	
 	@progress for i = 1:branchN
 
-		f(unkno::Vector{Float64}) = equations(unkno, z, N, b, B, E, L, a1Vals[i], 1.0)
+		f(u::Vector{Float64}) = equations(u, constants, a1Vals[i], 1.0)
 
 		# solve for the current branch point + capture
 		solutions[i,:] = mySolver(f, initial_guess[i,:])
@@ -322,11 +317,11 @@ end
 # ╔═╡ 2166a747-af03-47a0-89fd-11e82edd6d92
 begin
 	# create array for profiles
-	profiles = zeros(branchN,length(z))
+	profiles = zeros(branchN,length(constants.z))
 
 	# convert profiles
 	for i = 1:branchN
-		profiles[i,:] .= fourierSeries(solcoeffs[i,:], z, L)[1]
+		profiles[i,:] .= fourierSeries(solcoeffs[i,:], constants.z, constants.L)[1]
 	end
 
 	# reflect profiles 
@@ -340,13 +335,13 @@ md"index = $(@bind pindex PlutoUI.Slider(1:branchN, show_value = true, default=1
 # ╔═╡ 2d46a550-d1f1-46eb-8a8f-1a6d53570ddb
 begin
 	# plot profiles 
-	profile_plot = plot(z, solprofiles[pindex,:], legend=false, title = "a1 = $(round(solcoeffs[pindex,2], digits=3))", lw=2)
+	profile_plot = plot(constants.z, solprofiles[pindex,:], legend=false, title = "a1 = $(round(solcoeffs[pindex,2], digits=3))", lw=2)
 	ylims!(0.45,1.3)
 	xlabel!(L"z"); ylabel!(L"S")
 
 	# plot coeffs 
 	first_coeff = 0
-	coeff_plot = scatter(abs.(solcoeffs[pindex,first_coeff+1:end]), legend=false, title="k = $(round(pindex*π/L))", xticks = :all, yaxis=:log)
+	coeff_plot = scatter(abs.(solcoeffs[pindex,first_coeff+1:end]), legend=false, title="k = $(round(pindex*π/constants.L))", xticks = :all, yaxis=:log)
 	xlabel!("a$(first_coeff) to a$(length(solcoeffs[1,:])-1)")
 
 	# plot branch
@@ -1599,7 +1594,7 @@ version = "1.4.1+1"
 # ╠═bb761d05-d6b3-4c9d-b8e2-aedcf5885e93
 # ╠═2166a747-af03-47a0-89fd-11e82edd6d92
 # ╟─8a88d8d1-c9cd-46ab-b02a-ef18403374e2
-# ╟─2d46a550-d1f1-46eb-8a8f-1a6d53570ddb
+# ╠═2d46a550-d1f1-46eb-8a8f-1a6d53570ddb
 # ╟─35f1727a-d0f9-44b6-8b2a-ca7bca391a97
 # ╟─d1198bc1-3e21-48d5-9316-48eb6d7c715e
 # ╟─91ca4bf9-c0ac-45ca-9cff-633b0ef470e7
