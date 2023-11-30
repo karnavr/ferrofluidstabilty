@@ -49,7 +49,7 @@ function β(n, k, b, S0)
 end
 
 # ╔═╡ a9a6e8f2-62e4-4d75-9243-5bdcb4064ca5
-function c0(k, b, B)
+function c0(k, b::Float64, B::Float64)
 	# wave speed for small amplitude waves, depending on the wave-number k
 	
 	c0 = sqrt.((1 ./ k).*((-β(1,k,b,1) ./ β(0,k,b,1)) .* (k.^2 .- 1 .+ B)))
@@ -59,13 +59,16 @@ function c0(k, b, B)
 end
 
 # ╔═╡ 393f4352-2cf0-4c09-a077-7124e20ab7ef
-function fourierSeries(coefficients, domain, L)
+function fourierSeries(coefficients::Vector{Float64}, domain, L::Number)
+	
     N = length(coefficients) - 1
-    S = zeros(length(domain))  # Profile S
-    Sz = zeros(length(domain))  # First derivative Sz
-    Szz = zeros(length(domain))  # Second derivative Szz
+	
+    S = zeros(length(domain))  		# profile S
+    Sz = zeros(length(domain))  	# first derivative Sz
+    Szz = zeros(length(domain))  	# second derivative Szz
 
     for (i, x) in enumerate(domain)
+		
         # Calculate the series and its derivatives at each point x
         S[i] = coefficients[1] 
 		
@@ -101,7 +104,7 @@ function finite_diff_jacobian(f, x)
 end
 
 # ╔═╡ eaf2076b-952e-4d0b-89bc-9b9aa73fc31d
-function mySolver(f, initial_guess, solver = :Newton)
+function mySolver(f, initial_guess::Vector{Float64}; solver = :Newton, tol::Float64 = 10e-8, max_iter::Int64 = 1000)
 
 	tol = 10e-8  # Tolerance for convergence
 	max_iter = 1000  # Maximum number of iterations
@@ -153,17 +156,17 @@ md"###### Let's also create a custom struct for our problem constants"
 
 # ╔═╡ 812baaef-b066-46e8-8c4d-e9cfb41cd171
 struct Constants
-	N::Int64
-	L::Number
+	N::Int64  					# number of modes for solution S(z)
+	L::Number                   # half-domain length
 	
 	# domain definition
-	dz::Float64
-    z::Vector{Float64}
+	dz::Float64 				# domain spacing
+    z::Vector{Float64} 			# domain vector of values 
 
 	# magnetic constants 
-	B::Float64
-	b::Float64
-    E::Float64
+	B::Float64 					# Bond number 
+	b::Float64 					# inner rod radius
+    E::Float64                  # Bernoulli constant 
 	
 	
 	function Constants(N::Int64, L::Number, B::Float64, b::Float64)
@@ -1570,9 +1573,9 @@ version = "1.4.1+1"
 # ╟─77de6ee3-6225-4a84-80ad-e972702ce599
 # ╟─eb11bd85-5209-4128-becf-19de7a1d5ca3
 # ╟─97edda20-cc50-4979-8b14-3f4cc683147b
-# ╠═a9a6e8f2-62e4-4d75-9243-5bdcb4064ca5
+# ╟─a9a6e8f2-62e4-4d75-9243-5bdcb4064ca5
 # ╟─2d697339-389f-4ac6-96ee-949338445936
-# ╠═393f4352-2cf0-4c09-a077-7124e20ab7ef
+# ╟─393f4352-2cf0-4c09-a077-7124e20ab7ef
 # ╟─6ee58b6f-9706-4575-801d-169c8cef9cf3
 # ╟─eaf2076b-952e-4d0b-89bc-9b9aa73fc31d
 # ╟─95e6299b-70da-4a6d-af6b-b810cb80cd5e
@@ -1589,14 +1592,14 @@ version = "1.4.1+1"
 # ╟─20e2586b-6e38-4649-9e31-57823ccafb5c
 # ╠═eae01aa3-b324-428d-9b99-f325408f4fe5
 # ╟─30134931-5c28-45cb-a77f-92d30c7a032e
-# ╠═22f3e72d-9bf0-4b38-80a0-e0fb526be387
+# ╟─22f3e72d-9bf0-4b38-80a0-e0fb526be387
 # ╟─daf5f8ab-7c11-4d04-8dc9-6f7d18f49671
 # ╠═b2862a0f-c747-4bdc-b943-a189071086ee
 # ╟─21ba44c9-f70c-46b4-8ef6-4d37a6f0ffc1
 # ╠═bb761d05-d6b3-4c9d-b8e2-aedcf5885e93
 # ╠═2166a747-af03-47a0-89fd-11e82edd6d92
 # ╟─8a88d8d1-c9cd-46ab-b02a-ef18403374e2
-# ╠═2d46a550-d1f1-46eb-8a8f-1a6d53570ddb
+# ╟─2d46a550-d1f1-46eb-8a8f-1a6d53570ddb
 # ╟─35f1727a-d0f9-44b6-8b2a-ca7bca391a97
 # ╟─d1198bc1-3e21-48d5-9316-48eb6d7c715e
 # ╟─91ca4bf9-c0ac-45ca-9cff-633b0ef470e7
