@@ -29,7 +29,12 @@ begin
 end
 
 # ╔═╡ 77de6ee3-6225-4a84-80ad-e972702ce599
-md"## Waves on a Ferrofluid Jet"
+md"# Waves on a Ferrofluid Jet
+
+Solving for travelling waves on an axisymmetric jet of ferrofluid."
+
+# ╔═╡ eb11bd85-5209-4128-becf-19de7a1d5ca3
+md"## Function Definitions"
 
 # ╔═╡ 97edda20-cc50-4979-8b14-3f4cc683147b
 md"##### Helper functions"
@@ -93,42 +98,41 @@ end
 # ╔═╡ eaf2076b-952e-4d0b-89bc-9b9aa73fc31d
 function mySolver(f, initial_guess, solver = :Newton)
 
-	if solver == :Newton
+	tol = 10e-8  # Tolerance for convergence
+	max_iter = 1000  # Maximum number of iterations
 
-		tol = 1e-7  # Tolerance for convergence
-	    max_iter = 100  # Maximum number of iterations
-	    x = initial_guess
+	x = initial_guess
+
+	if solver == :Newton
+		
 	    for i in 1:max_iter
 	        J = finite_diff_jacobian(f, x)
-	        delta_x = -J \ f(x)  # Newton's update step
-	        x += delta_x
-	        if norm(delta_x) < tol  # Check for convergence
+	        δx = -J \ f(x)  # Newton's update step
+	        x += δx
+	        if norm(δx) < tol  # Check for convergence
 	            return x
 	        end
 	    end
 	    error("Failed to converge after $max_iter iterations")
 
 	elseif solver == :NewtonRaphson 
-
-		tol = 10e-8  # Tolerance for convergence
-	    max_iter = 1000  # Maximum number of iterations
-	    alpha = 1.0  # Initial step size
+	    
+	    # alpha = 1.0  # Initial step size
 	    c = 1e-4  # Sufficient decrease parameter
 	    rho = 0.5  # Step size reduction factor
-	
-	    x = initial_guess
+		
 	    for i in 1:max_iter
 	        J = finite_diff_jacobian(f, x)
-	        delta_x = -J \ f(x)  # Newton's update step
+	        δx = -J \ f(x)  # Newton's update step
 	        t = 1.0  # Initialize step size
 	
 	        # Backtracking line search
-	        while norm(f(x + t * delta_x)) > norm(f(x)) + c * t * dot(f(x), delta_x)
+	        while norm(f(x + t * δx)) > norm(f(x)) + c * t * dot(f(x), δx)
 	            t *= rho
 	        end
 	
-	        x += t * delta_x  # Update with the found step size
-	        if norm(delta_x) < tol  # Check for convergence
+	        x += t * δx  # Update with the found step size
+	        if norm(δx) < tol  # Check for convergence
 	            return x
 	        end
 	    end
@@ -139,6 +143,12 @@ function mySolver(f, initial_guess, solver = :Newton)
 	end
 end
 
+# ╔═╡ 59a615a4-e6ca-40ef-bbde-2890269ee3d0
+md"###### Let's also create a custom struct for our problem constants"
+
+# ╔═╡ 690898d4-9dc4-42c9-a9fe-b0c42dac4b76
+md"## Periodic wave solutions"
+
 # ╔═╡ 5760cc7d-3a01-4378-8a34-90354c8b6fcf
 md"##### Domain and problem constants"
 
@@ -146,7 +156,7 @@ md"##### Domain and problem constants"
 begin
 	# domain constants + domain
 	L = π
-	N = 36 					  # number of modes for solution S(z)
+	N = 32 					  # number of modes for solution S(z)
 	
 	dz = 2*L/(2*N+1)
 	z = collect(-L:dz:L)      # 2N + 2 points
@@ -163,18 +173,12 @@ md"Define the extent and values of the bifurcation parameter $a_1$:"
 
 # ╔═╡ cfb29296-fae6-4962-9ff7-fa712f98eab9
 begin
-	# branchN = 100
-	# a1Vals = collect(range(0.001, 0.19, branchN + 1))
+	branchN = 200
+	a1Vals = collect(range(0.001, 0.329, branchN + 1))
 
-	a1Vals = collect(0.001:3e-3:0.4)
-	branchN = Int(length(a1Vals)); nothing
+	# a1Vals = collect(0.001:3e-3:0.329)
+	# branchN = Int(length(a1Vals)); nothing
 end
-
-# ╔═╡ 205db03b-dd18-4e82-99a8-e81972ce720b
-md"Now let's initialize the solution array:"
-
-# ╔═╡ 61615a15-1e1f-401f-952d-5b49c549b1e3
-solutions = zeros(branchN, N+2)
 
 # ╔═╡ 14823be5-af35-47c1-b71d-2db319572035
 begin
@@ -233,7 +237,7 @@ function equations(unknowns::Vector{Float64}, z::Vector{Float64}, N::Int64, b::F
 	    one = k .* S .* sqrt.(Complex.(one_p))
 	    two = besselk.(1, k * b) .* besseli.(1, k .* S) .- besseli.(1, k * b) .* besselk.(1, k .* S)
 		
-	    integrands[k, :] = one .* two
+	    integrands[k, :] = real.(one .* two)
 		
 	    # Normalize the integrand before integration to prevent numerical issues
 	    integrands[k, :] ./= maximum(abs.(integrands[k, :]))
@@ -253,6 +257,10 @@ md"And now let's solve the system from $a_1$ = $(a1Vals[1]) to $(a1Vals[end])."
 
 # ╔═╡ b2862a0f-c747-4bdc-b943-a189071086ee
 begin
+
+	# initialize solution array
+	solutions = zeros(branchN, N+2)
+	
 	@progress for i = 1:branchN
 
 		f(unkno::Vector{Float64}) = equations(unkno, z, N, b, B, E, a1Vals[i], 1.0)
@@ -271,22 +279,23 @@ md"Now extract the solution speeds and Fourier coeffs, and also convert them to 
 
 # ╔═╡ bb761d05-d6b3-4c9d-b8e2-aedcf5885e93
 begin
-	# extract the solution speeds and coeffs 
 	solcoeffs = solutions[:,2:end]
 	solspeeds = solutions[:,1]; nothing
 end
 
 # ╔═╡ 2166a747-af03-47a0-89fd-11e82edd6d92
 begin
-	# convert profiles + extract speeds
+	# create array for profiles
 	profiles = zeros(branchN,length(z))
 
+	# convert profiles
 	for i = 1:branchN
 		profiles[i,:] .= fourierToReal(solcoeffs[i,:], z)[1]
 	end
 
 	# reflect profiles 
-	solprofiles = [profiles[:,Int(end/2):end] profiles[:,1:Int(end/2)-1]]; nothing
+	solprofiles = [profiles[:,Int(end/2)+1:end] profiles[:,1:Int(end/2)]]; nothing
+	# solprofiles = profiles
 end
 
 # ╔═╡ 8a88d8d1-c9cd-46ab-b02a-ef18403374e2
@@ -309,15 +318,21 @@ begin
 	xlabel!(L"c"); ylabel!(L"a_1")
 	xlims!(0.73,0.82); ylims!(0.04,0.34)
 	
-	plot(profile_plot, branch_plot, size=(700,350))
-	# plot(profile_plot, coeff_plot, size=(700,350))
+	# plot(profile_plot, branch_plot, size=(700,350))
+	plot(profile_plot, coeff_plot, size=(700,350))
 end
 
+# ╔═╡ 35f1727a-d0f9-44b6-8b2a-ca7bca391a97
+md"### Comparison with `MATLAB` results"
+
 # ╔═╡ d1198bc1-3e21-48d5-9316-48eb6d7c715e
-md"### Periodic Waves"
+md"## More periodic Waves"
 
 # ╔═╡ 91ca4bf9-c0ac-45ca-9cff-633b0ef470e7
-md"### Wilton Ripples"
+md"## Wilton Ripples"
+
+# ╔═╡ 0e0214d9-bccb-4750-9073-70a0e4f3bec0
+md"## Solitary Waves"
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -1520,6 +1535,7 @@ version = "1.4.1+1"
 # ╔═╡ Cell order:
 # ╠═58fc8746-79f5-11ee-1840-13e7eb19f6d9
 # ╟─77de6ee3-6225-4a84-80ad-e972702ce599
+# ╟─eb11bd85-5209-4128-becf-19de7a1d5ca3
 # ╟─97edda20-cc50-4979-8b14-3f4cc683147b
 # ╟─a9a6e8f2-62e4-4d75-9243-5bdcb4064ca5
 # ╟─2d697339-389f-4ac6-96ee-949338445936
@@ -1527,12 +1543,12 @@ version = "1.4.1+1"
 # ╟─6ee58b6f-9706-4575-801d-169c8cef9cf3
 # ╟─eaf2076b-952e-4d0b-89bc-9b9aa73fc31d
 # ╟─95e6299b-70da-4a6d-af6b-b810cb80cd5e
+# ╟─59a615a4-e6ca-40ef-bbde-2890269ee3d0
+# ╟─690898d4-9dc4-42c9-a9fe-b0c42dac4b76
 # ╟─5760cc7d-3a01-4378-8a34-90354c8b6fcf
 # ╠═7e0f1490-cab0-4b2b-ad14-91bf577dfd36
 # ╟─8a39570b-3825-4750-a9b3-c0917d5c7c41
 # ╠═cfb29296-fae6-4962-9ff7-fa712f98eab9
-# ╠═205db03b-dd18-4e82-99a8-e81972ce720b
-# ╠═61615a15-1e1f-401f-952d-5b49c549b1e3
 # ╟─d68c18bc-9185-4e44-94fe-f914a0b4b690
 # ╠═14823be5-af35-47c1-b71d-2db319572035
 # ╠═9dd85ed3-ba41-4cde-abba-1a045286dc3c
@@ -1547,7 +1563,9 @@ version = "1.4.1+1"
 # ╠═2166a747-af03-47a0-89fd-11e82edd6d92
 # ╟─8a88d8d1-c9cd-46ab-b02a-ef18403374e2
 # ╠═2d46a550-d1f1-46eb-8a8f-1a6d53570ddb
+# ╟─35f1727a-d0f9-44b6-8b2a-ca7bca391a97
 # ╟─d1198bc1-3e21-48d5-9316-48eb6d7c715e
 # ╟─91ca4bf9-c0ac-45ca-9cff-633b0ef470e7
+# ╟─0e0214d9-bccb-4750-9073-70a0e4f3bec0
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
