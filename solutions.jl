@@ -402,8 +402,41 @@ end
 # ╔═╡ d1198bc1-3e21-48d5-9316-48eb6d7c715e
 md"## More periodic waves"
 
+# ╔═╡ 041552cb-1599-438a-8139-255ff406fa79
+
+
 # ╔═╡ 91ca4bf9-c0ac-45ca-9cff-633b0ef470e7
 md"## Wilton ripples"
+
+# ╔═╡ ea730a74-562a-4a56-adac-06aaa7f8ea7b
+md"New constants:"
+
+# ╔═╡ ca1910b2-e6ee-4e54-84dc-8e53c0b33475
+wilton_constants = Constants(36,2.061/π,30.0,0.1)
+
+# ╔═╡ 2099ed16-d3d6-4612-b319-7e3695f12d7d
+md"Initialize wave speed:"
+
+# ╔═╡ a769c12a-57ad-4db9-bf11-debf43de1720
+begin
+	k1_wilton = 1*π/wilton_constants.L
+	cInitial_wilton = c0(k1_wilton, wilton_constants)
+end
+
+# ╔═╡ 5392135c-eb47-4533-8a8d-4befd7202477
+md"Extent of a₁ values + create intial guess:"
+
+# ╔═╡ 8d0e0bb7-2a3b-4a3e-bcb6-13120c3423c3
+begin
+	a1_wilton = collect(range(0.001, 0.04, branchN + 1))
+	
+	initial_wilton = (1e-10).*ones(branchN+1, wilton_constants.N+2)
+	initial_wilton[1,1:4] = [cInitial_wilton, 1.0, a1Vals[1], 1e-10]
+	initial_wilton[1,:]
+end
+
+# ╔═╡ ba40e060-3540-418a-9744-7531d6a084d7
+wilton_solutions = bifurcation(initial_wilton, a1_wilton, branchN, wilton_constants)
 
 # ╔═╡ 0e0214d9-bccb-4750-9073-70a0e4f3bec0
 md"## Solitary waves"
@@ -1647,7 +1680,15 @@ version = "1.4.1+1"
 # ╟─17f90aaa-1200-4d61-b5b5-e11069dab333
 # ╠═f3fce948-ffe1-499e-abb5-865f9ee4979a
 # ╟─d1198bc1-3e21-48d5-9316-48eb6d7c715e
+# ╠═041552cb-1599-438a-8139-255ff406fa79
 # ╟─91ca4bf9-c0ac-45ca-9cff-633b0ef470e7
+# ╟─ea730a74-562a-4a56-adac-06aaa7f8ea7b
+# ╠═ca1910b2-e6ee-4e54-84dc-8e53c0b33475
+# ╟─2099ed16-d3d6-4612-b319-7e3695f12d7d
+# ╠═a769c12a-57ad-4db9-bf11-debf43de1720
+# ╟─5392135c-eb47-4533-8a8d-4befd7202477
+# ╠═8d0e0bb7-2a3b-4a3e-bcb6-13120c3423c3
+# ╠═ba40e060-3540-418a-9744-7531d6a084d7
 # ╟─0e0214d9-bccb-4750-9073-70a0e4f3bec0
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
