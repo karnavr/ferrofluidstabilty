@@ -141,6 +141,9 @@ function mySolver(f, initial_guess::Vector{Float64}; solver = :Newton, tol::Floa
 	end
 end
 
+# ╔═╡ c261a24c-26f4-4b01-941e-528c735290a7
+md"##### Problem functions"
+
 # ╔═╡ 59a615a4-e6ca-40ef-bbde-2890269ee3d0
 md"###### Let's also create a custom struct for our problem constants"
 
@@ -180,6 +183,80 @@ function c0(k, constants::Constants)
 
 	return c0
 	
+end
+
+# ╔═╡ 22f3e72d-9bf0-4b38-80a0-e0fb526be387
+function equations(unknowns::Vector{Float64}, constants::Constants, a₁::Float64, a₀::Float64)
+
+	# Returns the $N + 2$ equations that we want to solve for:
+
+	# problem constants 
+	z = constants.z
+	N = constants.N
+	B = constants.B
+	b = constants.b
+	E = constants.E
+	L = constants.L
+
+	c = unknowns[1]
+	coeffs = unknowns[2:N+2] # N + 1 coeffs
+
+	a0 = coeffs[1]
+	a1 = coeffs[2]
+
+	S, Sz, Szz = fourierSeries(coeffs, z, L)
+
+	integrands = zeros(N, length(z)) # N integrands for k = 1:N
+	integrals = zeros(N) # N integrals (array gets condensed on the z-axis)
+	eqs = zeros(N+2) # integrands + 2 extra equations I define later
+
+	# define common factors in equations 
+	Szsq = 1 .+ (Sz.^2);
+
+	one_p = (Szsq).*((c.^2)./2 .- 1 ./ (S.*sqrt.(Szsq)) .+ Szz./(Szsq.^(3/2)) .+ B./(2 .* S.^2) .+ E);
+
+	for n = 1:N
+
+		k = n*π/L 
+		
+	    one = k .* S .* sqrt.(Complex.(one_p))
+	    two = besselk.(1, k * b) .* besseli.(1, k .* S) .- besseli.(1, k * b) .* besselk.(1, k .* S)
+		
+	    integrands[n, :] = real.(one .* two)
+		
+	    # Normalize the integrand before integration to prevent numerical issues
+	    integrands[n, :] ./= maximum(abs.(integrands[n, :]))
+	    integrals[n] = trapz(z, integrands[n, :] .* cos.(k .* z))
+	end
+
+	eqs[1:N] = real.(integrals)
+	eqs[N+1] = abs(a0 - a₀)
+	eqs[N+2] = abs(a1 - a₁)
+
+	return eqs
+	
+end
+
+# ╔═╡ 6d13c1e9-a930-424e-8f8e-cfa1339485fd
+function bifurcation(initial_guess, a1Vals, branchN, constants)
+
+	
+	# initialize solution array
+	solutions = zeros(branchN, constants.N+2)
+	
+	@progress for i = 1:branchN
+
+		f(u::Vector{Float64}) = equations(u, constants, a1Vals[i], 1.0)
+
+		# solve for the current branch point + capture
+		solutions[i,:] = mySolver(f, initial_guess[i,:])
+
+		# update intial guess 
+		initial_guess[i+1,:] = solutions[i,:]
+		
+	end
+	
+	return solutions 
 end
 
 # ╔═╡ 690898d4-9dc4-42c9-a9fe-b0c42dac4b76
@@ -233,80 +310,11 @@ begin
 	xlabel!("z"); ylabel!("S(z)")
 end
 
-# ╔═╡ 30134931-5c28-45cb-a77f-92d30c7a032e
-md"Define a function that returns the $N + 2$ equations that we want to solve for: "
-
-# ╔═╡ 22f3e72d-9bf0-4b38-80a0-e0fb526be387
-function equations(unknowns::Vector{Float64}, constants::Constants, a₁::Float64, a₀::Float64)
-
-	# problem constants 
-	z = constants.z
-	N = constants.N
-	B = constants.B
-	b = constants.b
-	E = constants.E
-	L = constants.L
-
-	c = unknowns[1]
-	coeffs = unknowns[2:N+2] # N + 1 coeffs
-
-	a0 = coeffs[1]
-	a1 = coeffs[2]
-
-	S, Sz, Szz = fourierSeries(coeffs, z, L)
-
-	integrands = zeros(N, length(z)) # N integrands for k = 1:N
-	integrals = zeros(N) # N integrals (array gets condensed on the z-axis)
-	eqs = zeros(N+2) # integrands + 2 extra equations I define later
-
-	# define common factors in equations 
-	Szsq = 1 .+ (Sz.^2);
-
-	one_p = (Szsq).*((c.^2)./2 .- 1 ./ (S.*sqrt.(Szsq)) .+ Szz./(Szsq.^(3/2)) .+ B./(2 .* S.^2) .+ E);
-
-	for n = 1:N
-
-		k = n*π/L 
-		
-	    one = k .* S .* sqrt.(Complex.(one_p))
-	    two = besselk.(1, k * b) .* besseli.(1, k .* S) .- besseli.(1, k * b) .* besselk.(1, k .* S)
-		
-	    integrands[n, :] = real.(one .* two)
-		
-	    # Normalize the integrand before integration to prevent numerical issues
-	    integrands[n, :] ./= maximum(abs.(integrands[n, :]))
-	    integrals[n] = trapz(z, integrands[n, :] .* cos.(k .* z))
-	end
-
-	eqs[1:N] = real.(integrals)
-	eqs[N+1] = abs(a0 - a₀)
-	eqs[N+2] = abs(a1 - a₁)
-
-	return eqs
-	
-end
-
 # ╔═╡ daf5f8ab-7c11-4d04-8dc9-6f7d18f49671
 md"And now let's solve the system from $a_1$ = $(a1Vals[1]) to $(a1Vals[end])."
 
-# ╔═╡ b2862a0f-c747-4bdc-b943-a189071086ee
-begin
-
-	# initialize solution array
-	solutions = zeros(branchN, constants.N+2)
-	
-	@progress for i = 1:branchN
-
-		f(u::Vector{Float64}) = equations(u, constants, a1Vals[i], 1.0)
-
-		# solve for the current branch point + capture
-		solutions[i,:] = mySolver(f, initial_guess[i,:])
-
-		# update intial guess 
-		initial_guess[i+1,:] = solutions[i,:]
-		
-	end
-end
+# ╔═╡ 23734b6f-4731-446b-891d-0c8e38909dc6
+solutions = bifurcation(initial_guess, a1Vals, branchN, constants)
 
 # ╔═╡ 21ba44c9-f70c-46b4-8ef6-4d37a6f0ffc1
 md"Now extract the solution speeds and Fourier coeffs, and also convert them to profiles."
@@ -352,8 +360,8 @@ begin
 	xlabel!(L"c"); ylabel!(L"a_1")
 	xlims!(0.73,0.82); ylims!(0.04,0.34)
 	
-	plot(profile_plot, branch_plot, size=(700,350))
-	# plot(profile_plot, coeff_plot, size=(700,350))
+	# plot(profile_plot, branch_plot, size=(700,350))
+	plot(profile_plot, coeff_plot, size=(700,350))
 end
 
 # ╔═╡ 35f1727a-d0f9-44b6-8b2a-ca7bca391a97
@@ -1577,6 +1585,9 @@ version = "1.4.1+1"
 # ╟─6ee58b6f-9706-4575-801d-169c8cef9cf3
 # ╟─eaf2076b-952e-4d0b-89bc-9b9aa73fc31d
 # ╟─95e6299b-70da-4a6d-af6b-b810cb80cd5e
+# ╟─c261a24c-26f4-4b01-941e-528c735290a7
+# ╟─22f3e72d-9bf0-4b38-80a0-e0fb526be387
+# ╟─6d13c1e9-a930-424e-8f8e-cfa1339485fd
 # ╟─59a615a4-e6ca-40ef-bbde-2890269ee3d0
 # ╠═812baaef-b066-46e8-8c4d-e9cfb41cd171
 # ╟─690898d4-9dc4-42c9-a9fe-b0c42dac4b76
@@ -1589,15 +1600,13 @@ version = "1.4.1+1"
 # ╠═9dd85ed3-ba41-4cde-abba-1a045286dc3c
 # ╟─20e2586b-6e38-4649-9e31-57823ccafb5c
 # ╟─eae01aa3-b324-428d-9b99-f325408f4fe5
-# ╟─30134931-5c28-45cb-a77f-92d30c7a032e
-# ╟─22f3e72d-9bf0-4b38-80a0-e0fb526be387
 # ╟─daf5f8ab-7c11-4d04-8dc9-6f7d18f49671
-# ╠═b2862a0f-c747-4bdc-b943-a189071086ee
+# ╠═23734b6f-4731-446b-891d-0c8e38909dc6
 # ╟─21ba44c9-f70c-46b4-8ef6-4d37a6f0ffc1
 # ╠═bb761d05-d6b3-4c9d-b8e2-aedcf5885e93
 # ╠═2166a747-af03-47a0-89fd-11e82edd6d92
 # ╟─8a88d8d1-c9cd-46ab-b02a-ef18403374e2
-# ╠═2d46a550-d1f1-46eb-8a8f-1a6d53570ddb
+# ╟─2d46a550-d1f1-46eb-8a8f-1a6d53570ddb
 # ╟─35f1727a-d0f9-44b6-8b2a-ca7bca391a97
 # ╟─d1198bc1-3e21-48d5-9316-48eb6d7c715e
 # ╟─91ca4bf9-c0ac-45ca-9cff-633b0ef470e7
