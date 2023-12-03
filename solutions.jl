@@ -375,7 +375,7 @@ msolutions = readdlm("test & misc/matlab_solutions.csv", ',', Float64)
 
 # ╔═╡ 5f4906d9-6f5d-4d12-b96b-5171688705e9
 begin
-	difference = abs.(msolutions[:,2:end] .- solutions[:,2:end])
+	difference = abs.(msolutions[:,:] .- solutions[:,:])
 	max_difference = zeros(branchN)
 	
 	for i = 1:branchN
@@ -387,7 +387,7 @@ end
 # ╔═╡ 7a0d93b5-484b-435c-88d7-38394c367b50
 begin
 	scatter(max_difference, yaxis=:log, legend = false)
-	xlabel!("branch point"); ylabel!("error")
+	xlabel!("branch point"); ylabel!("max abs error")
 end
 
 # ╔═╡ 17f90aaa-1200-4d61-b5b5-e11069dab333
@@ -396,6 +396,7 @@ md"error index = $(@bind error_index PlutoUI.Slider(1:branchN, show_value = true
 # ╔═╡ f3fce948-ffe1-499e-abb5-865f9ee4979a
 begin
 	scatter(abs.(difference[error_index,:]), legend = false)
+	xlabel!("solution vector index"); ylabel!("absolute error")
 end
 
 # ╔═╡ d1198bc1-3e21-48d5-9316-48eb6d7c715e
