@@ -48,16 +48,6 @@ function β(n, k, b, S0)
 	return beta1 + beta2
 end
 
-# ╔═╡ a9a6e8f2-62e4-4d75-9243-5bdcb4064ca5
-function c0(k, b::Float64, B::Float64)
-	# wave speed for small amplitude waves, depending on the wave-number k
-	
-	c0 = sqrt.((1 ./ k).*((-β(1,k,b,1) ./ β(0,k,b,1)) .* (k.^2 .- 1 .+ B)))
-
-	return c0
-	
-end
-
 # ╔═╡ 393f4352-2cf0-4c09-a077-7124e20ab7ef
 function fourierSeries(coefficients::Vector{Float64}, domain, L::Number)
 	
@@ -179,6 +169,19 @@ struct Constants
     end
 end
 
+# ╔═╡ a9a6e8f2-62e4-4d75-9243-5bdcb4064ca5
+function c0(k, constants::Constants)
+	# linearized wave speed for small amplitude waves c(k)
+
+	B = constants.B
+	b = constants.b
+	
+	c0 = sqrt.((1 ./ k).*((-β(1,k,b,1) ./ β(0,k,b,1)) .* (k.^2 .- 1 .+ B)))
+
+	return c0
+	
+end
+
 # ╔═╡ 690898d4-9dc4-42c9-a9fe-b0c42dac4b76
 md"## Periodic wave solutions"
 
@@ -186,15 +189,15 @@ md"## Periodic wave solutions"
 md"##### Domain and problem constants"
 
 # ╔═╡ 7e0f1490-cab0-4b2b-ad14-91bf577dfd36
-constants = Constants(16,π,1.5,0.1)
+constants = Constants(36,π,1.5,0.1)
 
 # ╔═╡ 8a39570b-3825-4750-a9b3-c0917d5c7c41
 md"Define the extent and values of the bifurcation parameter $a_1$:"
 
 # ╔═╡ cfb29296-fae6-4962-9ff7-fa712f98eab9
 begin
-	branchN = 200
-	a1Vals = collect(range(0.001, 0.329, branchN + 1))
+	branchN = 100
+	a1Vals = collect(range(0.001, 0.33, branchN + 1))
 
 	# a1Vals = collect(0.001:3e-3:0.329)
 	# branchN = Int(length(a1Vals)); nothing
@@ -203,7 +206,7 @@ end
 # ╔═╡ 14823be5-af35-47c1-b71d-2db319572035
 begin
 	k1 = 1*π/constants.L
-	cInitial = c0(k1, constants.b, constants.B); nothing
+	cInitial = c0(k1, constants); nothing
 
 	# cstar = sqrt(c0other^2 + (2-B)); c0 = cstar;
 end
@@ -349,8 +352,8 @@ begin
 	xlabel!(L"c"); ylabel!(L"a_1")
 	xlims!(0.73,0.82); ylims!(0.04,0.34)
 	
-	# plot(profile_plot, branch_plot, size=(700,350))
-	plot(profile_plot, coeff_plot, size=(700,350))
+	plot(profile_plot, branch_plot, size=(700,350))
+	# plot(profile_plot, coeff_plot, size=(700,350))
 end
 
 # ╔═╡ 35f1727a-d0f9-44b6-8b2a-ca7bca391a97
@@ -1585,7 +1588,7 @@ version = "1.4.1+1"
 # ╠═14823be5-af35-47c1-b71d-2db319572035
 # ╠═9dd85ed3-ba41-4cde-abba-1a045286dc3c
 # ╟─20e2586b-6e38-4649-9e31-57823ccafb5c
-# ╠═eae01aa3-b324-428d-9b99-f325408f4fe5
+# ╟─eae01aa3-b324-428d-9b99-f325408f4fe5
 # ╟─30134931-5c28-45cb-a77f-92d30c7a032e
 # ╟─22f3e72d-9bf0-4b38-80a0-e0fb526be387
 # ╟─daf5f8ab-7c11-4d04-8dc9-6f7d18f49671
