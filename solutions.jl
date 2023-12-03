@@ -186,6 +186,54 @@ function c0(k, constants::Constants)
 	
 end
 
+# ╔═╡ b2dab9b3-0ece-4a6f-bf5e-5f4629b41f28
+function plotting(solutions, index::Int, constants::Constants, shift_profiles = true)
+
+	ii = index 
+
+	# un-pack constants 
+	z = constants.z
+	N = constants.N
+	L = constants.L
+
+	branchN = length(solutions[:,1])
+
+	# seperate coeffs and speeds
+	coeffs = solutions[:,2:end]
+	speeds = solutions[:,1];
+
+	# create array for profiles
+	profiles = zeros(branchN,length(z))
+	
+	# convert profiles
+	for i = 1:branchN
+		profiles[i,:] .= fourierSeries(coeffs[i,:], z, L)[1]
+	end
+
+	# shift to the right profiles over by L
+	if shift_profiles == true
+		profiles = [profiles[:,Int(end/2)+1:end] profiles[:,1:Int(end/2)]]; nothing
+	end
+
+	# plot profiles 
+	profile_plot = plot(z, profiles[ii,:], legend=false, title = "a1 = $(round(coeffs[ii,2], digits=3))", lw=2)
+	ylims!(0.45,1.3)
+	xlabel!(L"z"); ylabel!(L"S")
+
+	# plot coeffs 
+	first_coeff = 0
+	coeff_plot = scatter(abs.(coeffs[ii,first_coeff+1:end]), legend=false, title="k = $(round(ii*π/L))", xticks = :all, yaxis=:log)
+	xlabel!("a$(first_coeff) to a$(length(coeffs[1,:])-1)")
+
+	# plot branch
+	branch_plot = scatter(speeds[1:ii], coeffs[1:ii,2], legend = false, markersize=4)
+	xlabel!(L"c"); ylabel!(L"a_1")
+	xlims!(0.73,0.82); ylims!(0.04,0.34)
+
+	return profile_plot, branch_plot, coeff_plot
+	
+end
+
 # ╔═╡ 22f3e72d-9bf0-4b38-80a0-e0fb526be387
 function equations(unknowns::Vector{Float64}, constants::Constants, a₁::Float64, a₀::Float64)
 
@@ -346,25 +394,11 @@ end
 # ╔═╡ 8a88d8d1-c9cd-46ab-b02a-ef18403374e2
 md"index = $(@bind pindex PlutoUI.Slider(1:branchN, show_value = true, default=1))"
 
-# ╔═╡ 2d46a550-d1f1-46eb-8a8f-1a6d53570ddb
+# ╔═╡ 95ff4027-ec4b-4834-90fa-7699260e1804
 begin
-	# plot profiles 
-	profile_plot = plot(constants.z, solprofiles[pindex,:], legend=false, title = "a1 = $(round(solcoeffs[pindex,2], digits=3))", lw=2)
-	ylims!(0.45,1.3)
-	xlabel!(L"z"); ylabel!(L"S")
-
-	# plot coeffs 
-	first_coeff = 0
-	coeff_plot = scatter(abs.(solcoeffs[pindex,first_coeff+1:end]), legend=false, title="k = $(round(pindex*π/constants.L))", xticks = :all, yaxis=:log)
-	xlabel!("a$(first_coeff) to a$(length(solcoeffs[1,:])-1)")
-
-	# plot branch
-	branch_plot = scatter(solspeeds[1:pindex], solcoeffs[1:pindex,2], legend = false, markersize=4)
-	xlabel!(L"c"); ylabel!(L"a_1")
-	xlims!(0.73,0.82); ylims!(0.04,0.34)
-	
-	# plot(profile_plot, branch_plot, size=(700,350))
-	plot(profile_plot, coeff_plot, size=(700,350))
+	profile_plot, branch_plot, coeff_plot = plotting(solutions, pindex, constants)
+	# plot(profile_plot, coeff_plot, size=(700,350))
+	plot(profile_plot, branch_plot, size=(700,350))
 end
 
 # ╔═╡ 35f1727a-d0f9-44b6-8b2a-ca7bca391a97
@@ -437,6 +471,9 @@ end
 
 # ╔═╡ ba40e060-3540-418a-9744-7531d6a084d7
 wilton_solutions = bifurcation(initial_wilton, a1_wilton, branchN, wilton_constants)
+
+# ╔═╡ 4ecb2cb1-1e29-4367-915f-b72c6a351569
+
 
 # ╔═╡ 0e0214d9-bccb-4750-9073-70a0e4f3bec0
 md"## Solitary waves"
@@ -1648,6 +1685,7 @@ version = "1.4.1+1"
 # ╟─a9a6e8f2-62e4-4d75-9243-5bdcb4064ca5
 # ╟─2d697339-389f-4ac6-96ee-949338445936
 # ╟─393f4352-2cf0-4c09-a077-7124e20ab7ef
+# ╟─b2dab9b3-0ece-4a6f-bf5e-5f4629b41f28
 # ╟─6ee58b6f-9706-4575-801d-169c8cef9cf3
 # ╟─eaf2076b-952e-4d0b-89bc-9b9aa73fc31d
 # ╟─95e6299b-70da-4a6d-af6b-b810cb80cd5e
@@ -1672,7 +1710,7 @@ version = "1.4.1+1"
 # ╠═bb761d05-d6b3-4c9d-b8e2-aedcf5885e93
 # ╠═2166a747-af03-47a0-89fd-11e82edd6d92
 # ╟─8a88d8d1-c9cd-46ab-b02a-ef18403374e2
-# ╠═2d46a550-d1f1-46eb-8a8f-1a6d53570ddb
+# ╠═95ff4027-ec4b-4834-90fa-7699260e1804
 # ╟─35f1727a-d0f9-44b6-8b2a-ca7bca391a97
 # ╠═ac1a5dd4-3687-4489-a33f-f77bfd8a4c18
 # ╠═5f4906d9-6f5d-4d12-b96b-5171688705e9
@@ -1689,6 +1727,7 @@ version = "1.4.1+1"
 # ╟─5392135c-eb47-4533-8a8d-4befd7202477
 # ╠═8d0e0bb7-2a3b-4a3e-bcb6-13120c3423c3
 # ╠═ba40e060-3540-418a-9744-7531d6a084d7
+# ╠═4ecb2cb1-1e29-4367-915f-b72c6a351569
 # ╟─0e0214d9-bccb-4750-9073-70a0e4f3bec0
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
