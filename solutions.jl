@@ -476,8 +476,17 @@ end
 # ╔═╡ ba40e060-3540-418a-9744-7531d6a084d7
 wilton_solutions = bifurcation(initial_wilton, a1_wilton, branchN, wilton_constants)
 
-# ╔═╡ 4ecb2cb1-1e29-4367-915f-b72c6a351569
+# ╔═╡ dac9e2bf-5eb9-4414-ae50-19ee6c27ebd8
+md"index = $(@bind windex PlutoUI.Slider(1:branchN, show_value = true, default=1))"
 
+# ╔═╡ 4ecb2cb1-1e29-4367-915f-b72c6a351569
+begin
+	wilton_profile_plot, wilton_branch_plot, wilton_coeff_plot = plotting(wilton_solutions, windex, wilton_constants, false)
+
+	# ylims!(wilton_profile_plot, 0.96,1.050)
+	
+	plot(wilton_profile_plot, wilton_branch_plot, size=(700,350))
+end
 
 # ╔═╡ 0e0214d9-bccb-4750-9073-70a0e4f3bec0
 md"## Solitary waves"
@@ -1731,6 +1740,7 @@ version = "1.4.1+1"
 # ╟─5392135c-eb47-4533-8a8d-4befd7202477
 # ╠═8d0e0bb7-2a3b-4a3e-bcb6-13120c3423c3
 # ╠═ba40e060-3540-418a-9744-7531d6a084d7
+# ╟─dac9e2bf-5eb9-4414-ae50-19ee6c27ebd8
 # ╠═4ecb2cb1-1e29-4367-915f-b72c6a351569
 # ╟─0e0214d9-bccb-4750-9073-70a0e4f3bec0
 # ╟─00000000-0000-0000-0000-000000000001
