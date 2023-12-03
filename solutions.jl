@@ -24,6 +24,7 @@ begin
 	using Trapz
 	using ProgressLogging
 	using LinearAlgebra
+	using DelimitedFiles
 	using PlutoUI
 	TableOfContents()
 end
@@ -240,6 +241,8 @@ end
 # ╔═╡ 6d13c1e9-a930-424e-8f8e-cfa1339485fd
 function bifurcation(initial_guess, a1Vals, branchN, constants)
 
+	# compute the birfucatin branch for brancN branch points and provided a₁ values, starting at the given intial guess
+
 	
 	# initialize solution array
 	solutions = zeros(branchN, constants.N+2)
@@ -249,7 +252,7 @@ function bifurcation(initial_guess, a1Vals, branchN, constants)
 		f(u::Vector{Float64}) = equations(u, constants, a1Vals[i], 1.0)
 
 		# solve for the current branch point + capture
-		solutions[i,:] = mySolver(f, initial_guess[i,:])
+		solutions[i,:] = mySolver(f, initial_guess[i,:], tol = 10e-8)
 
 		# update intial guess 
 		initial_guess[i+1,:] = solutions[i,:]
@@ -367,6 +370,34 @@ end
 # ╔═╡ 35f1727a-d0f9-44b6-8b2a-ca7bca391a97
 md"### Comparison with `MATLAB` results"
 
+# ╔═╡ ac1a5dd4-3687-4489-a33f-f77bfd8a4c18
+msolutions = readdlm("test & misc/matlab_solutions.csv", ',', Float64)
+
+# ╔═╡ 5f4906d9-6f5d-4d12-b96b-5171688705e9
+begin
+	difference = abs.(msolutions[:,2:end] .- solutions[:,2:end])
+	max_difference = zeros(branchN)
+	
+	for i = 1:branchN
+		max_difference[i] = maximum(difference[i,:]) 
+	end
+	
+end
+
+# ╔═╡ 7a0d93b5-484b-435c-88d7-38394c367b50
+begin
+	scatter(max_difference, yaxis=:log, legend = false)
+	xlabel!("branch point"); ylabel!("error")
+end
+
+# ╔═╡ 17f90aaa-1200-4d61-b5b5-e11069dab333
+md"error index = $(@bind error_index PlutoUI.Slider(1:branchN, show_value = true, default=1))"
+
+# ╔═╡ f3fce948-ffe1-499e-abb5-865f9ee4979a
+begin
+	scatter(abs.(difference[error_index,:]), legend = false)
+end
+
 # ╔═╡ d1198bc1-3e21-48d5-9316-48eb6d7c715e
 md"## More periodic waves"
 
@@ -379,6 +410,7 @@ md"## Solitary waves"
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
 [deps]
+DelimitedFiles = "8bb1440f-4735-579b-a4ab-409b98df4dab"
 LaTeXStrings = "b964fa9f-0449-5b57-a5c2-d3ea65f4040f"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 NLsolve = "2774e3e8-f4cf-5e23-947b-6d7e65073b56"
@@ -1606,8 +1638,13 @@ version = "1.4.1+1"
 # ╠═bb761d05-d6b3-4c9d-b8e2-aedcf5885e93
 # ╠═2166a747-af03-47a0-89fd-11e82edd6d92
 # ╟─8a88d8d1-c9cd-46ab-b02a-ef18403374e2
-# ╟─2d46a550-d1f1-46eb-8a8f-1a6d53570ddb
+# ╠═2d46a550-d1f1-46eb-8a8f-1a6d53570ddb
 # ╟─35f1727a-d0f9-44b6-8b2a-ca7bca391a97
+# ╠═ac1a5dd4-3687-4489-a33f-f77bfd8a4c18
+# ╠═5f4906d9-6f5d-4d12-b96b-5171688705e9
+# ╠═7a0d93b5-484b-435c-88d7-38394c367b50
+# ╟─17f90aaa-1200-4d61-b5b5-e11069dab333
+# ╠═f3fce948-ffe1-499e-abb5-865f9ee4979a
 # ╟─d1198bc1-3e21-48d5-9316-48eb6d7c715e
 # ╟─91ca4bf9-c0ac-45ca-9cff-633b0ef470e7
 # ╟─0e0214d9-bccb-4750-9073-70a0e4f3bec0
