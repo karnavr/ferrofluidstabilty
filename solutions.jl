@@ -217,7 +217,6 @@ function plotting(solutions, index::Int, constants::Constants, shift_profiles = 
 
 	# plot profiles 
 	profile_plot = plot(z, profiles[ii,:], legend=false, title = "a1 = $(round(coeffs[ii,2], digits=3))", lw=2)
-	ylims!(0.45,1.3)
 	xlabel!(L"z"); ylabel!(L"S")
 
 	# plot coeffs 
@@ -228,7 +227,6 @@ function plotting(solutions, index::Int, constants::Constants, shift_profiles = 
 	# plot branch
 	branch_plot = scatter(speeds[1:ii], coeffs[1:ii,2], legend = false, markersize=4)
 	xlabel!(L"c"); ylabel!(L"a_1")
-	xlims!(0.73,0.82); ylims!(0.04,0.34)
 
 	return profile_plot, branch_plot, coeff_plot
 	
@@ -397,8 +395,14 @@ md"index = $(@bind pindex PlutoUI.Slider(1:branchN, show_value = true, default=1
 # ╔═╡ 95ff4027-ec4b-4834-90fa-7699260e1804
 begin
 	profile_plot, branch_plot, coeff_plot = plotting(solutions, pindex, constants)
-	# plot(profile_plot, coeff_plot, size=(700,350))
+	
+	ylims!(profile_plot, 0.45,1.3)
+
+	xlims!(branch_plot, 0.73,0.82)
+	ylims!(branch_plot, 0.04,0.34)
+
 	plot(profile_plot, branch_plot, size=(700,350))
+	# plot(profile_plot, coeff_plot, size=(700,350))
 end
 
 # ╔═╡ 35f1727a-d0f9-44b6-8b2a-ca7bca391a97
