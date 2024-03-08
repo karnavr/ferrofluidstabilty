@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.19.29
+# v0.19.36
 
 using Markdown
 using InteractiveUtils
@@ -23,6 +23,7 @@ begin
 	using Trapz
 	using DelimitedFiles
 	using PlutoUI
+	using ProgressLogging
 	TableOfContents()
 end
 
@@ -95,7 +96,7 @@ md"m = $(@bind m PlutoUI.Slider(1:5, show_value = true, default=1))"
 
 # ╔═╡ 5fe20173-ce5d-4cbd-860d-f36833c1fdeb
 begin
-	μ = collect(range(0.001,1.0,100))
+	μ = collect(range(0.001,1.0,500))
 
 	λ1 = im .* c1 .* (μ .+ m) .+ im .* c0(μ .+ m, b, Bond) .* (μ .+ m)
 	λ2 = im .* c1 .* (μ .+ m) .- im .* c0(μ .+ m, b, Bond) .* (μ .+ m)
@@ -121,9 +122,6 @@ md"##### Numerically
 
 We can also solve the problem numerically and see if we get the same results"
 
-# ╔═╡ eda75fa2-e051-44a5-9cb7-c041ffd322ef
-
-
 # ╔═╡ 9196cc07-f410-4843-8a4c-5c716f36fa4b
 md"### Generalized Eigenvalue Problem"
 
@@ -133,7 +131,7 @@ md"Import numerical solution data and convert from fourier coeffs to profiles:"
 # ╔═╡ bb883c2d-8049-414f-adfe-919bacc1b6a9
 begin
 	# import results as array
-	msolutions = readdlm("matlab_solutions.csv", ',', Float64)
+	msolutions = readdlm("test & misc/matlab_solutions.csv", ',', Float64)
 
 	mcoeffs = msolutions[:,2:end]
 	mspeeds = msolutions[:,1]
@@ -151,6 +149,34 @@ begin
 	# reflect profiles 
 	mprofiles = [mprofiles[:,Int(end/2):end] mprofiles[:,1:Int(end/2)-1]]; nothing
 
+end
+
+# ╔═╡ 25c765a0-dda0-468d-ae7b-a8d7019fce7c
+function fourierSeries(coefficients::Vector{Float64}, domain, L::Number)
+	
+    N = length(coefficients) - 1
+	
+    S = zeros(length(domain))  		# profile S
+    Sz = zeros(length(domain))  	# first derivative Sz
+    Szz = zeros(length(domain))  	# second derivative Szz
+
+    for (i, x) in enumerate(domain)
+		
+        # Calculate the series and its derivatives at each point x
+        S[i] = coefficients[1] 
+		
+        for n in 1:N
+
+			k = n*π/L
+
+            S[i] += coefficients[n + 1] * cos(k * x)
+            Sz[i] -= k * coefficients[n + 1] * sin(k * x)
+            Szz[i] -= k^2 * coefficients[n + 1] * cos(k * x)
+        end
+		
+    end
+
+    return S, Sz, Szz
 end
 
 # ╔═╡ ef4bcf38-abc2-416f-a377-547930c69b62
@@ -182,28 +208,107 @@ md"Create ideal data for now:"
 # ╔═╡ 458b05b7-5655-415d-a9bf-f64d157ac891
 begin
 	z = collect(range(-π,+π,100))
+	
+	# newprofiles = zeros(nsols,length(mdomain))
+	S0, S0z, S0zz = fourierSeries(mcoeffs[40,:], z, π)
 
-	S0 = - 0.001 .* cos.(z) .+ 1
-	profile1 = mprofiles[1,:]
-	S0z = zeros(length(z))
-	S0zz = zeros(length(z))
+	# S0 = mprofiles[66,:]
+	# S0z = gradient(S0, z)
+	# S0zz = derivative(S0z, z)
+
+	# S0 = - 0.001 .* cos.(z) .+ 1
+	# S0 = - 0.00 .* cos.(z) .+ 1
+	# profile1 = mprofiles[1,:]
+	# S0z = zeros(length(z))
+	# S0zz = zeros(length(z))
 
 	S0sq = 1 .+ S0z.^2
 
 	scatter(z,S0)
-	scatter!(z,profile1)
+	# scatter!(z,profile1)
 	# scatter!(z,S0z)
-end
 
-# ╔═╡ 70f948f9-e526-47c3-98c9-d745493a5e18
-begin
-	c = c1
-	N = 2
+	c = mspeeds[40]
+	N = 4
 	# q0z = c0 + c0
 
 	κ = - (S0zz./(S0sq.^(3/2))) .+ (1 ./ (S0.*S0sq.^(1/2)))
 	q0z = c .+ (1 ./ S0) .* sqrt.(S0sq .* ( (c^2 + 2 .* ϵ .- 2 .* κ).*(S0.^2) .+ Bond))
 end
+
+# ╔═╡ 70f948f9-e526-47c3-98c9-d745493a5e18
+begin
+	# c = c1
+	# c = mspeeds[20]
+	# N = 4
+	# # q0z = c0 + c0
+
+	# κ = - (S0zz./(S0sq.^(3/2))) .+ (1 ./ (S0.*S0sq.^(1/2)))
+	# q0z = c .+ (1 ./ S0) .* sqrt.(S0sq .* ( (c^2 + 2 .* ϵ .- 2 .* κ).*(S0.^2) .+ Bond))
+end
+
+# ╔═╡ 50917e2b-48b0-41cb-95cd-a2d7b3a8bf7b
+# ╠═╡ disabled = true
+#=╠═╡
+begin
+
+	λ = zeros(ComplexF64, length(μ))
+	# λ = zeros(ComplexF64, 0)
+	
+for i = 1:length(μ)
+
+	# create matrices
+	A = Ag(N, z, S0z, q0z, c)
+	B = Bg(N, z)
+	E = Eg(N, z, S0, S0z, S0zz, q0z, c, Bond, μ[i])
+	F = Fg(N, z, S0, S0z, q0z, c, μ[i])
+
+	C = Cg(N, z, S0, b, μ[i])
+	D = zeros(2N+1,2N+1)
+	G = Gg(N, z, S0, b, c, μ[i])
+	H = Hg(N, z, S0, b, μ[i])
+
+	lhs = [A B; C D]
+    rhs = [E F; G H]
+	
+	# solve problem 
+	solutions = eigen(lhs, rhs)
+	
+	# save solution
+	λ[i] = (solutions.values)[5]
+
+	# append!(λ, solutions.values)
+end
+end
+  ╠═╡ =#
+
+# ╔═╡ 2ed210ad-a828-40ed-bbc0-dffb2e808b17
+λ = zeros(ComplexF64, 4*N+2, length(μ))
+
+# ╔═╡ 43165603-47c4-4107-8c7a-6bd4f056939c
+begin
+	scatter(vec(λ))
+	# xlims!(0.3,0.7)
+	ylims!(0.325,0.35)
+end
+
+# ╔═╡ 7d535fe6-f885-4ab6-8660-392887cb8e4b
+begin
+	maxrealλ = zeros(length(μ))
+	for i = 1:length(μ)
+		maxrealλ[i] = maximum(real(λ[:,i]))
+	end
+	scatter(μ,maxrealλ, label = "Re{λ}", markersize = 3)
+	# scatter!(μ,imag(λ), label = "Im{λ}")
+	# xlims!(0.5,0.6)
+
+	xlabel!(L"\mu")
+	# ylims!(-0.1,0.1)
+	# xlims!(-0.1,0.1)
+end
+
+# ╔═╡ f9244069-3f08-4446-8857-4d824ae13834
+md"### Full solver function"
 
 # ╔═╡ d2eeccbe-1f59-4e5e-9e64-342a38b8f477
 md"##### Matrix definitions"
@@ -243,8 +348,44 @@ function Ag(N, z, S0z, q0z, c)
 	
 end
 
+# ╔═╡ 6f8174f6-ee58-4c76-81fd-d6c522491339
+function Atest(N, z, S0z, q0z, c)
+
+	# initialize matrix
+	A = zeros(2*N+1, 2*N+1) .+ 0.0im
+	
+	# constants
+	α = 1 ./ (1 .+ S0z.^2)
+	f = S0z .* (q0z .- c) .* α
+
+	# loop over index to populate matrix
+	for mm = 1:(2*N+1)
+
+		for jj = 1:(2*N+1)
+
+			# working with both code and matrix indicies
+			m = mm - 1
+			j = jj - 1
+	
+			# define integrand specifc to matrix
+			term = f
+			
+			# populate matrix entries
+			A[jj,mm] =  1/(2*π) .* trapz(z,term .* exp.(- im .* j .* z))
+
+		end
+
+	end
+
+	return A 
+	
+end
+
 # ╔═╡ 4ee55b92-512b-431e-9973-d0c283aa13d2
 Ag(N, z, S0z, q0z, c1)
+
+# ╔═╡ fe9a9fca-f098-441e-b51f-8c27be65785d
+Atest(N, z, S0z, q0z, c1)
 
 # ╔═╡ 8d7afa78-57ae-4fb9-8899-4254f22a11f8
 function Bg(N, z)
@@ -310,12 +451,6 @@ Bg(N, z)
 # ╔═╡ 17fa2078-d17e-43b6-89e9-cc4396582676
 real(Btest(N,z))
 
-# ╔═╡ 25073141-5264-480a-9425-08ee4208bd1a
-md"Should B even be all -1?"
-
-# ╔═╡ 5ec63fde-9d89-428e-9efa-a9c4d43104ba
-1/(2*π) .* trapz(z, exp.(im .* 9 .* z))
-
 # ╔═╡ c2ec1e3a-7ed5-43de-867a-bfa2f25de5af
 function Eg(N, z, S0, S0z, S0zz, q0z, c, B, μ)
 
@@ -347,8 +482,46 @@ function Eg(N, z, S0, S0z, S0zz, q0z, c, B, μ)
 	return E
 end
 
+# ╔═╡ a61c0de8-5ec1-4f58-bad5-488931f53b60
+function Etest(N, z, S0, S0z, S0zz, q0z, c, B, μ)
+
+	# initialize matrix
+	E = zeros(2*N+1, 2*N+1) .+ 0.0im
+	
+	# constants
+	α = 1 ./ (1 .+ S0z.^2)
+	f = S0z .* (q0z .- c) .* α
+	γ = c .- q0z .+ f.*S0z
+
+	for mm = 1:(2*N+1)
+
+		for jj = 1:(2*N+1)
+
+			# working with both code and matrix indicies
+			m = mm - 1
+			j = jj - 1
+	
+			# define integrand specifc to matrix
+			term = ( γ.*f .+ 3 .*S0zz.*S0z.*(α.^(5/2)) .- ((α.^(3/2)) ./ S0) .* S0z .- (α.^(3/2)) .* im .* (μ .+ m) ) .* (im.*(μ .+ m)) .- (α.^(1/2)) ./ S0.^2 .+ B ./ S0.^3
+			
+			# populate matrix entries
+			E[jj,mm] =  1/(2*π) .* trapz(z,term .* exp.(- im .* (m-j) .* z))
+
+		end
+
+	end
+
+	return E
+end
+
 # ╔═╡ ce187832-a000-4d42-bdfd-da238e644f59
-Eg(N, z, S0, S0z, S0zz, q0z, c1, Bond, μ)
+Eg(N, z, S0, S0z, S0zz, q0z, c1, Bond, 0.1)
+
+# ╔═╡ 187edc0f-e9a5-406d-8a33-a326a6ccfa99
+real(Etest(N, z, S0, S0z, S0zz, q0z, c1, Bond, 0.1))
+
+# ╔═╡ cf7a32d7-59ca-46dc-9206-dfcd0d030e37
+(0.1 + 1).^2 - 1 + 1.5
 
 # ╔═╡ 0b757a49-b1a3-4d6d-b482-fe7adce2c499
 function Fg(N, z, S0, S0z, q0z, c, μ)
@@ -382,13 +555,62 @@ function Fg(N, z, S0, S0z, q0z, c, μ)
 	return F
 end
 
+# ╔═╡ 9338bc36-9f62-45a9-8805-bd7964c3e090
+function Ftest(N, z, S0, S0z, q0z, c, μ)
+
+	# initialize matrix
+	F = zeros(2*N+1, 2*N+1) .+ 0.0im
+	
+	# constants
+	α = 1 ./ (1 .+ S0z.^2)
+	f = S0z .* (q0z .- c) .* α
+	γ = c .- q0z .+ f.*S0z
+
+	# loop over index to populate matrix
+	for mm = 1:(2*N+1)
+
+		for jj = 1:(2*N+1)
+
+			# working with both code and matrix indicies
+			m = mm - 1
+			j = jj - 1
+	
+			# define integrand specifc to matrix
+			term = - γ .* im .* (μ .+ m)
+			# term = 5.0 * im
+			
+			# populate matrix entries
+			F[jj,mm] =  1/(2*π) .* trapz(z,term .* exp.(- im .* (m-j) .* z))
+
+		end
+
+	end
+	
+	return F
+end
+
+# ╔═╡ 5a36d3de-8341-4500-bff2-b32a88939377
+term = - (-c1) .* im .* (0 .+ 1)
+
+# ╔═╡ 84d5dba8-ac87-49eb-b7ca-0b186c8ba203
+trapz(z,term .* exp.(- im .* (0-1) .* z))
+
 # ╔═╡ 73828383-6b1f-4f8b-ab22-b2c5e1f581a0
 Fg(N, z, S0, S0z, q0z, c1, μ)
+
+# ╔═╡ 3cf16498-0770-4308-9962-eac685a43599
+imag(Ftest(N, z, S0, S0z, q0z, c1, 0.1))
+
+# ╔═╡ 86128a17-7089-4f55-9be3-c7da169b6ff6
+imag(- im .* (-c1) .* (0.1 + 1))
 
 # ╔═╡ b676b7ee-9d47-41dd-a80d-60fa8556a38e
 md"###### Non-local
 
 In this case, $j$ is a ''free'' index, so we iterate over both $j$ and $m$."
+
+# ╔═╡ 01b0c32a-a664-4d1c-9519-17d05a8dddb8
+md"Always seems to be off by a factor of m + μ..."
 
 # ╔═╡ 9c6745e6-0757-43f4-89da-ae6b04b1803c
 function Cg(N, z, S0, b, μ)
@@ -396,14 +618,13 @@ function Cg(N, z, S0, b, μ)
 	# initialize matrix
 	C = zeros(2*N+1, 2*N+1) .+ 0.0im
 
-	for mm = 1:(2*N + 1)
+	for mm = 1:(2*N+1)
 
-		# converting from code to matrix index
-		m = mm - 1
+		for jj = 1:(2*N+1)
 
-		for jj = 1:(2*N + 1)
-
-			j = jj - 1 
+			# working with both code and matrix indicies
+			m = mm - 1
+			j = jj - 1
 
 			k = m .+ μ
 
@@ -414,7 +635,71 @@ function Cg(N, z, S0, b, μ)
 			term = - k .* S0 .* β0
 			
 			# populate matrix entries
-			C[jj,mm] =  1/(2*π) .* round(trapz(z,term .* exp.(- im .* j .* z)))
+			C[jj,mm] =  1/(2*π) .* trapz(z,term .* exp.(- im .* (m - j).* z))
+		
+		end
+	end
+
+	return C
+	
+end
+
+# ╔═╡ ef4b6992-1053-4b64-a659-0f45407ce8ef
+function Ctest(N, z, S0, b, μ)
+
+	# initialize matrix
+	C = zeros(2*N+1, 2*N+1) .+ 0.0im
+
+	for mm = 1:(2*N+1)
+
+		for jj = 1:(2*N+1)
+
+			# working with both code and matrix indicies
+			m = mm - 1
+			j = jj - 1
+
+			k = m .+ μ
+
+			β0 = β(0, k, b, S0)
+			β1 = β(1, k, b, S0)
+
+			# define integrand specifc to matrix
+			term = - k .* S0 .* β0
+			
+			# populate matrix entries
+			C[jj,mm] =  1/(2*π) .* trapz(z,term .* exp.(- im .* (m - j).* z)) ./ k
+		
+		end
+	end
+
+	return C
+	
+end
+
+# ╔═╡ 36d65f3b-ef45-4960-b4ae-5e30b94e7500
+function Ctest2(N, z, S0, b, μ)
+
+	# initialize matrix
+	C = zeros(2*N+1, 2*N+1) .+ 0.0im
+
+	for mm = 1:(2*N+1)
+
+		for jj = 1:(2*N+1)
+
+			# working with both code and matrix indicies
+			m = mm - 1
+			j = jj - 1
+
+			k = j .+ μ
+
+			β0 = β(0, k, b, S0)
+			β1 = β(1, k, b, S0)
+
+			# define integrand specifc to matrix
+			term = - (j .+ μ) .* S0 .* β0
+			
+			# populate matrix entries
+			C[jj,mm] =  1/(2*π) .* trapz(z,term .* exp.(- im .* (m - j).* z))
 		
 		end
 	end
@@ -424,7 +709,16 @@ function Cg(N, z, S0, b, μ)
 end
 
 # ╔═╡ 39d542a2-0ecb-4ed0-b0cf-4eca6bd67094
-Cg(N, z, S0, b, μ)
+real(Cg(N, z, S0, b, 0.1))
+
+# ╔═╡ 20a266d9-7eaa-448c-bef0-209dc5771959
+-β(0, (3 + 0.1), b, S0) .* (3 + 0.1)
+
+# ╔═╡ a45b4050-302b-4842-a13e-3934041d75c4
+real(Ctest(N, z, S0, b, 0.1))
+
+# ╔═╡ dbea8be9-f915-4221-a71b-c98e4ca40a92
+-β(0, (1 + 0.1), b, S0)
 
 # ╔═╡ c75a4af4-ec70-41ae-848b-0d4464047936
 function Gg(N, z, S0, b, c, μ)
@@ -450,7 +744,73 @@ function Gg(N, z, S0, b, c, μ)
 			term = S0.*S0z.*c .* k.^2 .* β1 .- S0z.*c.*k.*β0 .+ im.*S0.*q0z.* k.^2 .* β0 .- im.*S0.*c.* k.^2 .* β0
 			
 			# populate matrix entries
-			G[jj,mm] =  1/(2*π) .* round(trapz(z,term .* exp.(- im .* j .* z)))
+			G[jj,mm] =  1/(2*π) .* trapz(z,term .* exp.(- im .* (m - j).* z))
+		
+		end
+	end
+
+	return G
+	
+end
+
+# ╔═╡ a44953e2-352b-4524-9191-ac0f0d3d9a43
+function Gtest(N, z, S0, b, c, μ)
+
+	# initialize matrix
+	G = zeros(2*N+1, 2*N+1) .+ 0.0im
+
+	for mm = 1:(2*N + 1)
+
+		# converting from code to matrix index
+		m = mm 
+
+		for jj = 1:(2*N + 1)
+
+			j = jj 
+
+			k = μ .+ m
+
+			β0 = β(0, k, b, S0)
+			β1 = β(1, k, b, S0)
+
+			# define integrand specifc to matrix
+			term = S0.*S0z.*c .* k.^2 .* β1 .- S0z.*c.*k.*β0 .+ im.*S0.*q0z.* k.^2 .* β0 .- im.*S0.*c.* k.^2 .* β0
+			
+			# populate matrix entries
+			G[jj,mm] =  1/(2*π) .* trapz(z,term .* exp.(- im .* (m - j).* z)) ./ k
+		
+		end
+	end
+
+	return G
+	
+end
+
+# ╔═╡ bdecea25-78ce-43d1-9ad9-17785889f722
+function Gtest2(N, z, S0, b, c, μ)
+
+	# initialize matrix
+	G = zeros(2*N+1, 2*N+1) .+ 0.0im
+
+	for mm = 1:(2*N + 1)
+
+		# converting from code to matrix index
+		m = mm 
+
+		for jj = 1:(2*N + 1)
+
+			j = jj 
+
+			k = μ .+ j
+
+			β0 = β(0, k, b, S0)
+			β1 = β(1, k, b, S0)
+
+			# define integrand specifc to matrix
+			term = S0.*S0z.*c .* k.^2 .* β1 .- S0z.*c.*k.*β0 .+ im.*S0.*q0z.* k.^2 .* β0 .- im.*S0.*c.* k .* (μ .+ m) .* β0
+			
+			# populate matrix entries
+			G[jj,mm] =  1/(2*π) .* trapz(z,term .* exp.(- im .* (m - j).* z))
 		
 		end
 	end
@@ -460,7 +820,16 @@ function Gg(N, z, S0, b, c, μ)
 end
 
 # ╔═╡ 8c00452c-2585-4edc-9ed6-b5befaa7991d
-Gg(N, z, S0, b, c1, μ)
+imag(Gg(N, z, S0, b, c1, 0.1))
+
+# ╔═╡ 8a542361-959e-4c6d-b15d-2c5700b2ef3c
+imag((im .* (0.1 + 2) .* β(0, (0.1 + 2), b, S0)) .* (c1)) .* (0.1 + 2) 
+
+# ╔═╡ 04077a45-a8a3-4d4b-a558-174c059d413d
+imag(Gtest(N, z, S0, b, c1, 0.1))
+
+# ╔═╡ 9bb89559-2490-4f7a-8256-e02239ccff29
+imag((im .* (0.1 + 3) .* β(0, (0.1 + 3), b, S0)) .* (c1))
 
 # ╔═╡ b586cc56-cef0-4a0a-b31d-b7a9b37ecffa
 function Hg(N, z, S0, b, μ)
@@ -486,7 +855,7 @@ function Hg(N, z, S0, b, μ)
 			term = S0 .* k.^2 .* β1
 			
 			# populate matrix entries
-			H[jj,mm] =  1/(2*π) .* round(trapz(z,term .* exp.(- im .* j .* z)))
+			H[jj,mm] =  1/(2*π) .* round(trapz(z,term .* exp.(- im .* (m - j).* z)))
 		
 		end
 	end
@@ -495,53 +864,415 @@ function Hg(N, z, S0, b, μ)
 	
 end
 
-# ╔═╡ 50917e2b-48b0-41cb-95cd-a2d7b3a8bf7b
+# ╔═╡ 727e16e0-989a-4168-b705-7512e52fbf83
+function Htest(N, z, S0, b, μ)
+
+	# initialize matrix
+	H = zeros(2*N+1, 2*N+1) .+ 0.0im
+
+	for mm = 1:(2*N + 1)
+
+		# converting from code to matrix index
+		m = mm
+
+		for jj = 1:(2*N + 1)
+
+			j = jj 
+
+			k = μ .+ m
+
+			β0 = β(0, k, b, S0)
+			β1 = β(1, k, b, S0)
+
+			# define integrand specifc to matrix
+			term = S0 .* k.^2 .* β1
+			
+			# populate matrix entries
+			H[jj,mm] =  1/(2*π) .* round(trapz(z,term .* exp.(- im .* (m - j).* z))) ./ k
+		
+		end
+	end
+
+	return H
+	
+end
+
+# ╔═╡ e7ef8aa5-8668-4489-97e8-fb46c80a501c
+function Htest2(N, z, S0, b, μ)
+
+	# initialize matrix
+	H = zeros(2*N+1, 2*N+1) .+ 0.0im
+
+	for mm = 1:(2*N + 1)
+
+		# converting from code to matrix index
+		m = mm
+
+		for jj = 1:(2*N + 1)
+
+			j = jj 
+
+			k = μ .+ j
+
+			β0 = β(0, k, b, S0)
+			β1 = β(1, k, b, S0)
+
+			# define integrand specifc to matrix
+			term = S0 .* k .* (μ .+ m) .* β1
+			
+			# populate matrix entries
+			H[jj,mm] =  1/(2*π) .* round(trapz(z,term .* exp.(- im .* (m - j).* z)))
+		
+		end
+	end
+
+	return H
+	
+end
+
+# ╔═╡ ad51ce37-7a2d-4741-b69b-f85683ec4b28
 begin
 
-	λ = zeros(ComplexF64, length(μ))
+	# λ = zeros(ComplexF64, length(μ))
 	# λ = zeros(ComplexF64, 0)
+
+	# λ = zeros(4*N+2, length(μ))
+	# λ = zeros(ComplexF64, 4*N+2, length(μ))
 	
-for i = 1:length(μ)
+@progress for i = 1:length(μ)
 
 	# create matrices
-	A = Ag(N, z, S0z, q0z, c)
-	B = Bg(N, z)
-	E = Eg(N, z, S0, S0z, S0zz, q0z, c, Bond, μ[i])
-	F = Fg(N, z, S0, S0z, q0z, c, μ[i])
+	A = Atest(N, z, S0z, q0z, c)
+	B = Btest(N, z)
+	E = Etest(N, z, S0, S0z, S0zz, q0z, c, Bond, μ[i])
+	F = Ftest(N, z, S0, S0z, q0z, c, μ[i])
 
-	C = Cg(N, z, S0, b, μ[i])
+	C = Ctest2(N, z, S0, b, μ[i])
 	D = zeros(2N+1,2N+1)
-	G = Gg(N, z, S0, b, c, μ[i])
-	H = Hg(N, z, S0, b, μ[i])
+	G = Gtest2(N, z, S0, b, c, μ[i])
+	H = Htest2(N, z, S0, b, μ[i])
 
 	lhs = [A B; C D]
     rhs = [E F; G H]
 	
 	# solve problem 
-	solutions = eigen(lhs, rhs)
+	solutions = eigen(rhs, lhs)
 	
 	# save solution
-	λ[i] = (solutions.values)[5]
+	λ[:,i] = (solutions.values)
 
 	# append!(λ, solutions.values)
+end
+end
 
+# ╔═╡ 5f6b4556-54f2-42e8-841f-684c00a19ee9
+function solveGenEig(solution, Nmodes, Nmu, plotting = true)
+
+	# un-pack solution 
+	coeffs = solution[2:end]
+	c = solution[1]
+	N = Nmodes
+
+	# create domain and convert to real space
+	z = collect(range(-π,+π,100))
+	S0, S0z, S0zz = fourierSeries(coeffs, z, π)
+
+	# commonly used constants
+	S0sq = 1 .+ S0z.^2
+	κ = - (S0zz./(S0sq.^(3/2))) .+ (1 ./ (S0.*S0sq.^(1/2)))
+	q0z = c .+ (1 ./ S0) .* sqrt.(S0sq .* ( (c^2 + 2 .* ϵ .- 2 .* κ).*(S0.^2) .+ Bond))
+
+	# set up stability stuff
+	μ = collect(range(0.001,1.0,Nmu))
+	λ = zeros(ComplexF64, 4*N+2, length(μ))
+
+	# create matrices that stay constant (don't depend on μ)
+	A = Atest(N, z, S0z, q0z, c)
+	B = Btest(N, z)
+	D = zeros(2N+1,2N+1)
 	
-end
+	
+	@progress for i = 1:length(μ)
+
+		# create matrices
+		
+		E = Etest(N, z, S0, S0z, S0zz, q0z, c, Bond, μ[i])
+		F = Ftest(N, z, S0, S0z, q0z, c, μ[i])
+	
+		C = Ctest2(N, z, S0, b, μ[i])
+		G = Gtest2(N, z, S0, b, c, μ[i])
+		H = Htest2(N, z, S0, b, μ[i])
+	
+		lhs = [A B; C D]
+	    rhs = [E F; G H]
+		
+		# solve problem 
+		solutions = eigen(rhs, lhs)
+		
+		# save solution
+		λ[:,i] = (solutions.values)
+	
+	end
+
+	if plotting == true
+
+		# plot λ on complex plane
+		complexPlot = scatter(vec(λ), markersize = 1, legend = false)
+		# xlims!(0.3,0.7)
+		# ylims!(0.325,0.35)
+
+		# plot max real λ vs μ
+		maxrealλ = zeros(length(μ))
+		for i = 1:length(μ)
+			maxrealλ[i] = maximum(real(λ[:,i]))
+		end
+
+		muPlot = scatter(μ,maxrealλ, label = "Re{λ}", markersize = 1)
+		xlabel!(L"\mu")
+
+		# combine into one plot
+		plot(complexPlot, muPlot, size=(700,350))
+		
+		
+	end
+
+	return plot(complexPlot, muPlot, size=(700,350))
 end
 
-# ╔═╡ 43165603-47c4-4107-8c7a-6bd4f056939c
-scatter(λ)
+# ╔═╡ 001a6f78-7e07-46d4-9a58-d53f86fa0239
+solveGenEig(msolutions[40,:], 2, 1000, true)
 
-# ╔═╡ 7d535fe6-f885-4ab6-8660-392887cb8e4b
-begin
-	scatter(μ,real(λ), label = "Re{λ}")
-	scatter!(μ,imag(λ), label = "Im{λ}")
+# ╔═╡ f1c23bf3-15ba-4db7-be8e-49c5abcdf6a8
+solveGenEig(msolutions[40,:], 4, 1000, true)
 
-	xlabel!(L"\mu")
-end
+# ╔═╡ cd603fe7-bcac-4609-91dc-f32ef2a64c83
+solveGenEig(msolutions[40,:], 4, 5000, true)
 
 # ╔═╡ 7bc4c8dc-0134-47fd-bc6a-18fbe81aff82
-Hg(N, z, S0, b, μ)
+real(Hg(N, z, S0, b, 0.1))
+
+# ╔═╡ ac93e9d5-6097-4ecf-b35f-e60952f1284b
+β(1, (0.1 + 2), b, S0) .* (0.1 + 2) .* (0.1 + 2)
+
+# ╔═╡ 729abf56-2a75-48af-bb72-9168fcf9560a
+real(Htest(N, z, S0, b, 0.1))
+
+# ╔═╡ 20683dd5-d1f1-4969-865b-a12c201c3c76
+β(1, (0.1 + 3), b, S0) .* π 
+
+# ╔═╡ 6823e7bf-66f5-4a1f-b063-b19fadf071db
+md"#### Equilibrium"
+
+# ╔═╡ 3ff4a644-f633-4d30-b36d-8b56094bfb20
+md"###### Local "
+
+# ╔═╡ d52ecd4c-9755-491b-94f7-db96fae1eb05
+function Be(N)
+
+	# initialize matrix
+	B = zeros(2*N+1, 2*N+1) .+ 0.0im
+
+	# loop over index to populate matrix
+	for mm = 1:(2*N+1)
+
+			# working with both code and matrix indicies
+			m = mm - 1
+			j = m
+			
+			# populate matrix entries
+			B[mm,mm] =  -1
+
+	end
+	
+	return B
+end
+
+# ╔═╡ f5b244e8-0a8e-41a1-8ead-b0f2922fb125
+real(Be(N))
+
+# ╔═╡ 87d3da6f-7537-48b1-9c9e-6ffd9e45f602
+function Ee(N, B, μ)
+
+	# initialize matrix
+	E = zeros(2*N+1, 2*N+1) .+ 0.0im
+
+	# loop over index to populate matrix
+	for mm = 1:(2*N+1)
+
+			# working with both code and matrix indicies
+			m = mm - 1
+			j = m
+			
+			# populate matrix entries
+			E[mm,mm] = (μ .+ m).^2 - 1 + B
+
+	end
+	
+	return E
+end
+
+# ╔═╡ 3cf7fb88-db37-4d34-a13f-efde9000e8b7
+real(Ee(N, 1.5, 0.1))
+
+# ╔═╡ 570496eb-a486-41b4-a441-9c5efc095fab
+function Fe(N, S0z, q0z, c, μ)
+
+	# initialize matrix
+	F = zeros(2*N+1, 2*N+1) .+ 0.0im
+
+	# constants
+	α = 1 ./ (1 .+ S0z.^2)
+	f = S0z .* (q0z .- c) .* α
+	γ = c .- q0z .+ f.*S0z
+
+	# loop over index to populate matrix
+	for mm = 1:(2*N+1)
+
+			# working with both code and matrix indicies
+			m = mm - 1
+			j = m
+			
+			# populate matrix entries
+			F[mm,mm] = -im .* γ[1] .* (μ .+ m)
+
+	end
+	
+	return F
+end
+
+# ╔═╡ 75f39b14-c053-471c-bea8-6657bd70656d
+imag(Fe(N, S0z, q0z, c1, 0.1))
+
+# ╔═╡ bc5cdcfe-cf3e-4e83-b423-712e3a4d13e6
+md"###### Non-local "
+
+# ╔═╡ 9904c284-ef99-4ee6-877c-9e06eb416f1f
+function Ce(N, z, S0, b, μ)
+
+	# initialize matrix
+	C = zeros(2*N+1, 2*N+1) .+ 0.0im
+
+	# loop over index to populate matrix
+	for mm = 1:(2*N+1)
+
+			# working with both code and matrix indicies
+			m = mm - 1
+			j = m
+
+			k = μ .+ m
+			
+			# populate matrix entries
+			C[mm,mm] =  -β(0, k, b, S0)[1]
+
+	end
+	
+	return C
+	
+end
+
+# ╔═╡ c72c3408-a7c1-4427-8ebc-1572fe40d1c3
+real(Ce(N, z, S0, b, 0.1))
+
+# ╔═╡ 19004d6e-b4a5-4754-8564-8bde3e2c2532
+function Ge(N, z, S0, b, c, μ)
+
+	# initialize matrix
+	G = zeros(2*N+1, 2*N+1) .+ 0.0im
+
+	# loop over index to populate matrix
+	for mm = 1:(2*N+1)
+
+			# working with both code and matrix indicies
+			m = mm - 1
+			j = m
+
+			k = μ .+ m
+			
+			# populate matrix entries
+			G[mm,mm] = ((im .* k .* β(0, k, b, S0)) .* (q0z .- c))[1]
+
+	end
+
+	return G
+	
+end
+
+# ╔═╡ 41e552a4-0976-40d9-a1b1-e40f241dea4a
+imag(Ge(N, z, S0, b, c1, 0.1))
+
+# ╔═╡ 471c8398-1306-4514-ab4c-2e37c04cfe9b
+function He(N, z, S0, b, μ)
+
+	# initialize matrix
+	H = zeros(2*N+1, 2*N+1) .+ 0.0im
+
+	# loop over index to populate matrix
+	for mm = 1:(2*N+1)
+
+			# working with both code and matrix indicies
+			m = mm - 1
+			j = m
+
+			k = μ .+ m
+		
+			β1 = β(1, k, b, S0)
+			
+			# populate matrix entries
+			H[mm,mm] = (-β1 .* k)[1]
+
+	end
+
+	return H
+	
+end
+
+# ╔═╡ eda75fa2-e051-44a5-9cb7-c041ffd322ef
+begin
+
+	λe = zeros(ComplexF64, length(μ))
+	# λ = zeros(ComplexF64, 0)
+	
+@progress for i = 1:length(μ)
+
+	# create matrices
+	Aeq = zeros(2N+1,2N+1)
+	Beq = Be(N)
+	Eeq = Ee(N, Bond, μ[i])
+	Feq = Fe(N, S0z, q0z, c, μ[i])
+
+	Ceq = Ce(N, z, S0, b, μ[i])
+	Deq = zeros(2N+1,2N+1)
+	Geq = Ge(N, z, S0, b, c, μ[i])
+	Heq = He(N, z, S0, b, μ[i])
+
+	lhse = [Aeq Beq; Ceq Deq]
+    rhse = [Eeq Feq; Geq Heq]
+	
+	# solve problem 
+	solutionse = eigen(rhse, lhse)
+	
+	# save solution
+	# λe[i] = (solutions.values)[5]
+
+	append!(λe, solutionse.values)
+end
+end
+
+# ╔═╡ 50ecf6a6-1c16-48c3-9597-d5967402b0c9
+scatter(λe)
+
+# ╔═╡ f0b14fd1-f089-4e5d-bf07-9e66bc97e2e9
+begin
+	scatter(μ,real(λe), label = "Re{λ}")
+	scatter!(μ,imag(λe), label = "Im{λ}")
+
+	xlabel!(L"\mu")
+	# ylims!(-0.1,0.1)
+	# xlims!(-0.1,0.1)
+end
+
+# ╔═╡ 329a421b-a0aa-488a-a4a3-1c3d8bb153e6
+real(He(N, z, S0, b, 0.1))
 
 # ╔═╡ 00000000-0000-0000-0000-000000000001
 PLUTO_PROJECT_TOML_CONTENTS = """
@@ -551,6 +1282,7 @@ LaTeXStrings = "b964fa9f-0449-5b57-a5c2-d3ea65f4040f"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
 PlutoUI = "7f904dfe-b85e-4ff6-b463-dae2292396a8"
+ProgressLogging = "33c8b6b6-d38a-422a-b730-caa89a2f386c"
 SpecialFunctions = "276daf66-3868-5448-9aa4-cd146d93841b"
 Trapz = "592b5752-818d-11e9-1e9a-2b8ca4a44cd1"
 
@@ -558,6 +1290,7 @@ Trapz = "592b5752-818d-11e9-1e9a-2b8ca4a44cd1"
 LaTeXStrings = "~1.3.1"
 Plots = "~1.39.0"
 PlutoUI = "~0.7.52"
+ProgressLogging = "~0.1.4"
 SpecialFunctions = "~2.3.1"
 Trapz = "~2.0.3"
 """
@@ -591,9 +1324,9 @@ version = "0.1.7"
 
 [[deps.Bzip2_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
-git-tree-sha1 = "19a35467a82e236ff51bc17a3a44b69ef35185a2"
+git-tree-sha1 = "9e2a6b69137e6969bab0152632dcb3bc108c8bdd"
 uuid = "6e34b625-4abd-537c-b88f-471c36dfa7a0"
-version = "1.0.8+0"
+version = "1.0.8+1"
 
 [[deps.Cairo_jll]]
 deps = ["Artifacts", "Bzip2_jll", "CompilerSupportLibraries_jll", "Fontconfig_jll", "FreeType2_jll", "Glib_jll", "JLLWrappers", "LZO_jll", "Libdl", "Pixman_jll", "Pkg", "Xorg_libXext_jll", "Xorg_libXrender_jll", "Zlib_jll", "libpng_jll"]
@@ -1149,6 +1882,12 @@ version = "1.4.1"
 deps = ["Unicode"]
 uuid = "de0858da-6303-5e67-8744-51eddeeeb8d7"
 
+[[deps.ProgressLogging]]
+deps = ["Logging", "SHA", "UUIDs"]
+git-tree-sha1 = "80d919dee55b9c50e8d9e2da5eeafff3fe58b539"
+uuid = "33c8b6b6-d38a-422a-b730-caa89a2f386c"
+version = "0.1.4"
+
 [[deps.Qt6Base_jll]]
 deps = ["Artifacts", "CompilerSupportLibraries_jll", "Fontconfig_jll", "Glib_jll", "JLLWrappers", "Libdl", "Libglvnd_jll", "OpenSSL_jll", "Vulkan_Loader_jll", "Xorg_libSM_jll", "Xorg_libXext_jll", "Xorg_libXrender_jll", "Xorg_libxcb_jll", "Xorg_xcb_util_cursor_jll", "Xorg_xcb_util_image_jll", "Xorg_xcb_util_keysyms_jll", "Xorg_xcb_util_renderutil_jll", "Xorg_xcb_util_wm_jll", "Zlib_jll", "libinput_jll", "xkbcommon_jll"]
 git-tree-sha1 = "7c29f0e8c575428bd84dc3c72ece5178caa67336"
@@ -1563,9 +2302,9 @@ version = "1.18.0+0"
 
 [[deps.libpng_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg", "Zlib_jll"]
-git-tree-sha1 = "94d180a6d2b5e55e447e2d27a29ed04fe79eb30c"
+git-tree-sha1 = "f7c281e9c61905521993a987d38b5ab1d4b53bef"
 uuid = "b53b4c65-9356-5827-b1ea-8c7a1a84506f"
-version = "1.6.38+0"
+version = "1.6.38+1"
 
 [[deps.libvorbis_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Ogg_jll", "Pkg"]
@@ -1610,10 +2349,10 @@ version = "1.4.1+1"
 # ╠═ce56ba82-79e8-11ee-1b30-272520e58195
 # ╟─6009f94c-6eb6-400f-8f73-f0433e82e42d
 # ╟─8eeaba0e-8d13-4dea-9534-b45c53e9847f
-# ╠═d60a4f84-af0b-48ff-95ff-5ddaef40c034
-# ╠═48249892-d7de-4048-88bb-dcd93e81da62
+# ╟─d60a4f84-af0b-48ff-95ff-5ddaef40c034
+# ╟─48249892-d7de-4048-88bb-dcd93e81da62
 # ╟─1e018b6a-6e6f-470d-8e41-deaa52570d7f
-# ╠═0c13895c-6bd9-4377-929a-285d2b59843c
+# ╟─0c13895c-6bd9-4377-929a-285d2b59843c
 # ╟─042be35a-81e4-45ca-b1cf-2023be8092bb
 # ╟─cc94cd11-da4f-4e31-800c-3053d7bfb2fd
 # ╠═5fe20173-ce5d-4cbd-860d-f36833c1fdeb
@@ -1621,37 +2360,86 @@ version = "1.4.1+1"
 # ╠═a0401fc6-9ddd-4bdc-98b9-a1543bc010fa
 # ╟─7a13978f-9f3d-4206-8262-3a8929dbe957
 # ╠═eda75fa2-e051-44a5-9cb7-c041ffd322ef
+# ╠═50ecf6a6-1c16-48c3-9597-d5967402b0c9
+# ╠═f0b14fd1-f089-4e5d-bf07-9e66bc97e2e9
 # ╟─9196cc07-f410-4843-8a4c-5c716f36fa4b
 # ╟─1b148894-7680-4f9e-b489-eec0d89db4a5
 # ╠═bb883c2d-8049-414f-adfe-919bacc1b6a9
+# ╟─25c765a0-dda0-468d-ae7b-a8d7019fce7c
 # ╟─ef4bcf38-abc2-416f-a377-547930c69b62
-# ╠═6d9b1e2d-032f-4f78-ad59-84c408de490b
+# ╟─6d9b1e2d-032f-4f78-ad59-84c408de490b
 # ╟─30364597-1f57-4e30-ade6-31ad6f11949d
 # ╠═458b05b7-5655-415d-a9bf-f64d157ac891
 # ╠═70f948f9-e526-47c3-98c9-d745493a5e18
 # ╠═50917e2b-48b0-41cb-95cd-a2d7b3a8bf7b
+# ╠═2ed210ad-a828-40ed-bbc0-dffb2e808b17
+# ╠═ad51ce37-7a2d-4741-b69b-f85683ec4b28
 # ╠═43165603-47c4-4107-8c7a-6bd4f056939c
 # ╠═7d535fe6-f885-4ab6-8660-392887cb8e4b
+# ╟─f9244069-3f08-4446-8857-4d824ae13834
+# ╠═5f6b4556-54f2-42e8-841f-684c00a19ee9
+# ╠═001a6f78-7e07-46d4-9a58-d53f86fa0239
+# ╠═f1c23bf3-15ba-4db7-be8e-49c5abcdf6a8
+# ╠═cd603fe7-bcac-4609-91dc-f32ef2a64c83
 # ╟─d2eeccbe-1f59-4e5e-9e64-342a38b8f477
 # ╟─191f060d-4302-4b18-82f8-6e20224ee201
 # ╟─9bc57aaf-5cba-4569-975c-a504730b8008
+# ╟─6f8174f6-ee58-4c76-81fd-d6c522491339
 # ╠═4ee55b92-512b-431e-9973-d0c283aa13d2
-# ╠═8d7afa78-57ae-4fb9-8899-4254f22a11f8
-# ╠═2f4b4efd-a892-4797-a9f1-e5f94222af33
+# ╠═fe9a9fca-f098-441e-b51f-8c27be65785d
+# ╟─8d7afa78-57ae-4fb9-8899-4254f22a11f8
+# ╟─2f4b4efd-a892-4797-a9f1-e5f94222af33
 # ╠═1eabaff3-9776-4280-a4dc-5686441544f4
 # ╠═17fa2078-d17e-43b6-89e9-cc4396582676
-# ╟─25073141-5264-480a-9425-08ee4208bd1a
-# ╠═5ec63fde-9d89-428e-9efa-a9c4d43104ba
 # ╟─c2ec1e3a-7ed5-43de-867a-bfa2f25de5af
+# ╟─a61c0de8-5ec1-4f58-bad5-488931f53b60
 # ╠═ce187832-a000-4d42-bdfd-da238e644f59
+# ╠═187edc0f-e9a5-406d-8a33-a326a6ccfa99
+# ╠═cf7a32d7-59ca-46dc-9206-dfcd0d030e37
 # ╟─0b757a49-b1a3-4d6d-b482-fe7adce2c499
+# ╟─9338bc36-9f62-45a9-8805-bd7964c3e090
+# ╠═5a36d3de-8341-4500-bff2-b32a88939377
+# ╠═84d5dba8-ac87-49eb-b7ca-0b186c8ba203
 # ╠═73828383-6b1f-4f8b-ab22-b2c5e1f581a0
+# ╠═3cf16498-0770-4308-9962-eac685a43599
+# ╠═86128a17-7089-4f55-9be3-c7da169b6ff6
 # ╟─b676b7ee-9d47-41dd-a80d-60fa8556a38e
-# ╠═9c6745e6-0757-43f4-89da-ae6b04b1803c
+# ╟─01b0c32a-a664-4d1c-9519-17d05a8dddb8
+# ╟─9c6745e6-0757-43f4-89da-ae6b04b1803c
+# ╟─ef4b6992-1053-4b64-a659-0f45407ce8ef
+# ╟─36d65f3b-ef45-4960-b4ae-5e30b94e7500
 # ╠═39d542a2-0ecb-4ed0-b0cf-4eca6bd67094
+# ╠═20a266d9-7eaa-448c-bef0-209dc5771959
+# ╠═a45b4050-302b-4842-a13e-3934041d75c4
+# ╠═dbea8be9-f915-4221-a71b-c98e4ca40a92
 # ╟─c75a4af4-ec70-41ae-848b-0d4464047936
+# ╟─a44953e2-352b-4524-9191-ac0f0d3d9a43
+# ╟─bdecea25-78ce-43d1-9ad9-17785889f722
 # ╠═8c00452c-2585-4edc-9ed6-b5befaa7991d
+# ╠═8a542361-959e-4c6d-b15d-2c5700b2ef3c
+# ╠═04077a45-a8a3-4d4b-a558-174c059d413d
+# ╠═9bb89559-2490-4f7a-8256-e02239ccff29
 # ╟─b586cc56-cef0-4a0a-b31d-b7a9b37ecffa
+# ╟─727e16e0-989a-4168-b705-7512e52fbf83
+# ╟─e7ef8aa5-8668-4489-97e8-fb46c80a501c
 # ╠═7bc4c8dc-0134-47fd-bc6a-18fbe81aff82
+# ╠═ac93e9d5-6097-4ecf-b35f-e60952f1284b
+# ╠═729abf56-2a75-48af-bb72-9168fcf9560a
+# ╠═20683dd5-d1f1-4969-865b-a12c201c3c76
+# ╟─6823e7bf-66f5-4a1f-b063-b19fadf071db
+# ╟─3ff4a644-f633-4d30-b36d-8b56094bfb20
+# ╟─d52ecd4c-9755-491b-94f7-db96fae1eb05
+# ╠═f5b244e8-0a8e-41a1-8ead-b0f2922fb125
+# ╟─87d3da6f-7537-48b1-9c9e-6ffd9e45f602
+# ╠═3cf7fb88-db37-4d34-a13f-efde9000e8b7
+# ╟─570496eb-a486-41b4-a441-9c5efc095fab
+# ╠═75f39b14-c053-471c-bea8-6657bd70656d
+# ╟─bc5cdcfe-cf3e-4e83-b423-712e3a4d13e6
+# ╟─9904c284-ef99-4ee6-877c-9e06eb416f1f
+# ╠═c72c3408-a7c1-4427-8ebc-1572fe40d1c3
+# ╟─19004d6e-b4a5-4754-8564-8bde3e2c2532
+# ╠═41e552a4-0976-40d9-a1b1-e40f241dea4a
+# ╟─471c8398-1306-4514-ab4c-2e37c04cfe9b
+# ╠═329a421b-a0aa-488a-a4a3-1c3d8bb153e6
 # ╟─00000000-0000-0000-0000-000000000001
 # ╟─00000000-0000-0000-0000-000000000002
