@@ -331,6 +331,7 @@ function stabilityPlots(λ, Nmu)
 
 		# combine into one plot
 		plot(complexPlot, muPlot, size=(700,350))
+		title!("Nmu = $(Nmu)")
 		
 
 	return plot(complexPlot, muPlot, size=(700,350))
@@ -1080,6 +1081,31 @@ end
 begin
 	λ45000 = solveGenEig(msolutions[40,:], 4, 5000, true)
 	stabilityPlots(λ45000, 5000)
+end
+
+# ╔═╡ 69ad7b3f-45ad-4a3b-8381-f6ac0cd6daf5
+λ410000 = solveGenEig(msolutions[40,:], 4, 10000, true)
+
+# ╔═╡ ddb3bfb8-4c1f-4a6e-b72a-a96e99e75859
+stabilityPlots(λ410000, 10000)
+
+# ╔═╡ cebac023-d60e-464c-89bf-ed15f26c432f
+λ420000 = solveGenEig(msolutions[40,:], 4, 20000, true)
+
+# ╔═╡ 30b461ba-a69f-4de9-bf84-ecca8a6da742
+begin 
+	stabilityPlots(λ420000, 20000)
+	ylims!(-1e-10, 1e-10)
+	xlims!(0.04, 0.045)
+end
+
+# ╔═╡ 157fc67a-93cf-4bec-8a2d-8be2230dcb51
+λ810000 = solveGenEig(msolutions[40,:], 8, 10000, true)
+
+# ╔═╡ 134fd2c0-61ac-4ba3-9246-da571dfdb352
+begin
+	stabilityPlots(λ810000, 10000)
+	ylims!(-1e-7, 1e-7)
 end
 
 # ╔═╡ d89e6f1b-697e-4ebb-90cb-2d8649b49a31
@@ -2491,6 +2517,12 @@ version = "1.4.1+1"
 # ╠═001a6f78-7e07-46d4-9a58-d53f86fa0239
 # ╠═f1c23bf3-15ba-4db7-be8e-49c5abcdf6a8
 # ╠═cd603fe7-bcac-4609-91dc-f32ef2a64c83
+# ╠═69ad7b3f-45ad-4a3b-8381-f6ac0cd6daf5
+# ╠═ddb3bfb8-4c1f-4a6e-b72a-a96e99e75859
+# ╠═cebac023-d60e-464c-89bf-ed15f26c432f
+# ╠═30b461ba-a69f-4de9-bf84-ecca8a6da742
+# ╠═157fc67a-93cf-4bec-8a2d-8be2230dcb51
+# ╠═134fd2c0-61ac-4ba3-9246-da571dfdb352
 # ╟─d2eeccbe-1f59-4e5e-9e64-342a38b8f477
 # ╟─191f060d-4302-4b18-82f8-6e20224ee201
 # ╟─9bc57aaf-5cba-4569-975c-a504730b8008
