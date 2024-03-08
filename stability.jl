@@ -310,6 +310,32 @@ end
 # ╔═╡ f9244069-3f08-4446-8857-4d824ae13834
 md"### Full solver function"
 
+# ╔═╡ 615b3f79-3a72-49ba-bb1d-90a52311c3cd
+function stabilityPlots(λ, Nmu)
+
+	μ = collect(range(0.001,1.0,Nmu))
+
+	# plot λ on complex plane
+		complexPlot = scatter(vec(λ), markersize = 1, legend = false)
+		# xlims!(0.3,0.7)
+		# ylims!(0.325,0.35)
+
+		# plot max real λ vs μ
+		maxrealλ = zeros(Nmu)
+		for i = 1:Nmu
+			maxrealλ[i] = maximum(real(λ[:,i]))
+		end
+
+		muPlot = scatter(μ,maxrealλ, label = "Re{λ}", markersize = 1)
+		xlabel!(L"\mu")
+
+		# combine into one plot
+		plot(complexPlot, muPlot, size=(700,350))
+		
+
+	return plot(complexPlot, muPlot, size=(700,350))
+end
+
 # ╔═╡ d2eeccbe-1f59-4e5e-9e64-342a38b8f477
 md"##### Matrix definitions"
 
@@ -992,6 +1018,97 @@ function solveGenEig(solution, Nmodes, Nmu, plotting = true)
 	D = zeros(2N+1,2N+1)
 	
 	
+	Threads.@threads for i = 1:length(μ)
+
+		# create matrices
+		
+		E = Etest(N, z, S0, S0z, S0zz, q0z, c, Bond, μ[i])
+		F = Ftest(N, z, S0, S0z, q0z, c, μ[i])
+	
+		C = Ctest2(N, z, S0, b, μ[i])
+		G = Gtest2(N, z, S0, b, c, μ[i])
+		H = Htest2(N, z, S0, b, μ[i])
+	
+		lhs = [A B; C D]
+	    rhs = [E F; G H]
+		
+		# solve problem 
+		solutions = eigen(rhs, lhs)
+		
+		# save solution
+		λ[:,i] = (solutions.values)
+	
+	end
+
+	if plotting == true
+
+		# plot λ on complex plane
+		complexPlot = scatter(vec(λ), markersize = 1, legend = false)
+		# xlims!(0.3,0.7)
+		# ylims!(0.325,0.35)
+
+		# plot max real λ vs μ
+		maxrealλ = zeros(length(μ))
+		for i = 1:length(μ)
+			maxrealλ[i] = maximum(real(λ[:,i]))
+		end
+
+		muPlot = scatter(μ,maxrealλ, label = "Re{λ}", markersize = 1)
+		xlabel!(L"\mu")
+
+		# combine into one plot
+		plot(complexPlot, muPlot, size=(700,350))
+		
+	end
+
+	return λ
+end
+
+# ╔═╡ 001a6f78-7e07-46d4-9a58-d53f86fa0239
+begin
+	λ21000 = solveGenEig(msolutions[40,:], 2, 1000, true)
+	stabilityPlots(λ21000, 1000)
+end
+
+# ╔═╡ f1c23bf3-15ba-4db7-be8e-49c5abcdf6a8
+begin
+	λ41000 = solveGenEig(msolutions[40,:], 4, 1000, true)
+	stabilityPlots(λ41000, 1000)
+end
+
+# ╔═╡ cd603fe7-bcac-4609-91dc-f32ef2a64c83
+begin
+	λ45000 = solveGenEig(msolutions[40,:], 4, 5000, true)
+	stabilityPlots(λ45000, 5000)
+end
+
+# ╔═╡ d89e6f1b-697e-4ebb-90cb-2d8649b49a31
+function solveGenEignothreads(solution, Nmodes, Nmu, plotting = true)
+
+	# un-pack solution 
+	coeffs = solution[2:end]
+	c = solution[1]
+	N = Nmodes
+
+	# create domain and convert to real space
+	z = collect(range(-π,+π,100))
+	S0, S0z, S0zz = fourierSeries(coeffs, z, π)
+
+	# commonly used constants
+	S0sq = 1 .+ S0z.^2
+	κ = - (S0zz./(S0sq.^(3/2))) .+ (1 ./ (S0.*S0sq.^(1/2)))
+	q0z = c .+ (1 ./ S0) .* sqrt.(S0sq .* ( (c^2 + 2 .* ϵ .- 2 .* κ).*(S0.^2) .+ Bond))
+
+	# set up stability stuff
+	μ = collect(range(0.001,1.0,Nmu))
+	λ = zeros(ComplexF64, 4*N+2, length(μ))
+
+	# create matrices that stay constant (don't depend on μ)
+	A = Atest(N, z, S0z, q0z, c)
+	B = Btest(N, z)
+	D = zeros(2N+1,2N+1)
+	
+	
 	@progress for i = 1:length(μ)
 
 		# create matrices
@@ -1038,15 +1155,6 @@ function solveGenEig(solution, Nmodes, Nmu, plotting = true)
 
 	return plot(complexPlot, muPlot, size=(700,350))
 end
-
-# ╔═╡ 001a6f78-7e07-46d4-9a58-d53f86fa0239
-solveGenEig(msolutions[40,:], 2, 1000, true)
-
-# ╔═╡ f1c23bf3-15ba-4db7-be8e-49c5abcdf6a8
-solveGenEig(msolutions[40,:], 4, 1000, true)
-
-# ╔═╡ cd603fe7-bcac-4609-91dc-f32ef2a64c83
-solveGenEig(msolutions[40,:], 4, 5000, true)
 
 # ╔═╡ 7bc4c8dc-0134-47fd-bc6a-18fbe81aff82
 real(Hg(N, z, S0, b, 0.1))
@@ -2377,7 +2485,9 @@ version = "1.4.1+1"
 # ╠═43165603-47c4-4107-8c7a-6bd4f056939c
 # ╠═7d535fe6-f885-4ab6-8660-392887cb8e4b
 # ╟─f9244069-3f08-4446-8857-4d824ae13834
-# ╠═5f6b4556-54f2-42e8-841f-684c00a19ee9
+# ╟─5f6b4556-54f2-42e8-841f-684c00a19ee9
+# ╟─615b3f79-3a72-49ba-bb1d-90a52311c3cd
+# ╟─d89e6f1b-697e-4ebb-90cb-2d8649b49a31
 # ╠═001a6f78-7e07-46d4-9a58-d53f86fa0239
 # ╠═f1c23bf3-15ba-4db7-be8e-49c5abcdf6a8
 # ╠═cd603fe7-bcac-4609-91dc-f32ef2a64c83
