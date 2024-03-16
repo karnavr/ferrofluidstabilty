@@ -13,11 +13,12 @@ function solveGenEig(solution, Nmodes, Nmu)
     Bond = 1.5
     b = 0.1
     ϵ = 1 - Bond/2
+	N = Nmodes
     
 	# un-pack solution 
 	coeffs = solution[2:end]
 	c = solution[1]
-	N = Nmodes
+	
 
 	# create domain and convert to real space
 	z = collect(range(-π,+π,100))
@@ -41,12 +42,11 @@ function solveGenEig(solution, Nmodes, Nmu)
 	Threads.@threads for i = 1:length(μ)
 
 		# create matrices
-		
 		E = Eg(N, z, S0, S0z, S0zz, q0z, c, Bond, μ[i])
 		F = Fg(N, z, S0, S0z, q0z, c, μ[i])
 	
 		C = Cg(N, z, S0, b, μ[i])
-		G = Gg(N, z, S0, b, c, μ[i])
+		G = Gg(N, z, S0, S0z, q0z, b, c, μ[i])
 		H = Hg(N, z, S0, b, μ[i])
 	
 		lhs = [A B; C D]
@@ -61,6 +61,32 @@ function solveGenEig(solution, Nmodes, Nmu)
 	end
 
 	return λ
+end
+
+function stabilityPlots(λ, Nmu)
+
+	μ = collect(range(0.001,1.0,Nmu))
+
+	# plot λ on complex plane
+		complexPlot = scatter(vec(λ), markersize = 1, legend = false)
+		# xlims!(0.3,0.7)
+		# ylims!(0.325,0.35)
+
+		# plot max real λ vs μ
+		maxrealλ = zeros(Nmu)
+		for i = 1:Nmu
+			maxrealλ[i] = maximum(real(λ[:,i]))
+		end
+
+		muPlot = scatter(μ,maxrealλ, label = "Re{λ}", markersize = 1)
+		xlabel!(L"\mu")
+
+		# combine into one plot
+		plot(complexPlot, muPlot, size=(700,350))
+		title!("Nmu = $(Nmu)")
+		
+
+	return plot(complexPlot, muPlot, size=(700,350))
 end
 
 ## Helper functions
@@ -259,7 +285,7 @@ function Cg(N, z, S0, b, μ)
 	
 end
 
-function Gg(N, z, S0, b, c, μ)
+function Gg(N, z, S0, S0z, q0z, b, c, μ)
 
 	# initialize matrix
 	G = zeros(2*N+1, 2*N+1) .+ 0.0im
