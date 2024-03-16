@@ -8,6 +8,11 @@ using DelimitedFiles
 ## Solvers 
 
 function solveGenEig(solution, Nmodes, Nmu)
+
+    # constants
+    Bond = 1.5
+    b = 0.1
+    ϵ = 1 - Bond/2
     
 	# un-pack solution 
 	coeffs = solution[2:end]
@@ -85,6 +90,14 @@ function fourierSeries(coefficients::Vector{Float64}, domain, L::Number)
     end
 
     return S, Sz, Szz
+end
+
+function β(n, k, b, S0)
+
+	beta1 = besseli.(1, k*b) .* besselk.(n, k.*S0)
+	beta2 = (-1)^n .* besselk.(1, k*b) .* besseli.(n, k.*S0)
+
+	return beta1 + beta2
 end
 
 ## Matrices
