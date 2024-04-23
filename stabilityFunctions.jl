@@ -180,6 +180,23 @@ function β(n, k, b, S0)
 	return beta1 + beta2
 end
 
+function c0(k, b, B)
+
+	# wave speed for small amplitude waves, depending on the wave-number k
+	c0  = sqrt.((1 ./ k).*((-β(1,k,b,1) ./ β(0,k,b,1)) .* (k.^2 .- 1 .+ B)))
+
+	return c0
+	
+end
+
+function λeq(μ, m, c1, b, Bond)
+
+	λ₊ = im .* c1 .* (μ .+ m) .+ im .* c0(μ .+ m, b, Bond) .* (μ .+ m)
+	λ₋ = im .* c1 .* (μ .+ m) .- im .* c0(μ .+ m, b, Bond) .* (μ .+ m)
+
+	return λ₊, λ₋
+end
+
 ## Matrices
 
 # LOCAL 
