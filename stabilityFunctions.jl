@@ -191,10 +191,13 @@ end
 
 function λeq(μ, m, c1, b, Bond)
 
+	# filter μ to ensure k = μ + m is > 0
+	μ = filter(μ -> μ + m > 0, μ) 
+
 	λ₊ = im .* c1 .* (μ .+ m) .+ im .* c0(μ .+ m, b, Bond) .* (μ .+ m)
 	λ₋ = im .* c1 .* (μ .+ m) .- im .* c0(μ .+ m, b, Bond) .* (μ .+ m)
 
-	return λ₊, λ₋
+	return μ, λ₊, λ₋
 end
 
 ## Matrices
