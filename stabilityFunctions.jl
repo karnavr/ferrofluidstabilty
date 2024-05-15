@@ -180,16 +180,30 @@ function β(n, k, b, S0)
 	return beta1 + beta2
 end
 
-function c0(k, b, B)
+function βapprox(n, k, b, S0, nterms=10)
+
+	# compute the terms using Iapprox and Kapprox
+	beta1 = Iapprox(1, k*b, nterms) .* Kapprox(n, k*S0, nterms)
+	beta2 = (-1)^n .* Kapprox(1, k*b, nterms) .* Iapprox(n, k*S0, nterms)
+
+	return beta1 + beta2
+end
+
+function c0(k, b, B, approx = false)
 
 	# wave speed for small amplitude waves, depending on the wave-number k
 	c0  = sqrt.((1 ./ k).*((-β(1,k,b,1) ./ β(0,k,b,1)) .* (k.^2 .- 1 .+ B)))
+
+	# if approx is true, use the approximation
+	if approx
+		c0 = sqrt.(Complex.((1 ./ k).*((-βapprox(1,k,b,1) ./ βapprox(0,k,b,1)) .* (k.^2 .- 1 .+ B))))
+	end
 
 	return c0
 	
 end
 
-function λeq(μ, m, c1, b, Bond)
+function λeq(μ, m, c1, b, Bond, approx = false)
 
 	# filter μ to ensure k = μ + m is > 0
 	μ = filter(μ -> μ + m > 0, μ) 
@@ -197,7 +211,63 @@ function λeq(μ, m, c1, b, Bond)
 	λ₊ = im .* c1 .* (μ .+ m) .+ im .* c0(μ .+ m, b, Bond) .* (μ .+ m)
 	λ₋ = im .* c1 .* (μ .+ m) .- im .* c0(μ .+ m, b, Bond) .* (μ .+ m)
 
+	# if approx is true, use the approximation
+	if approx
+		λ₊ = im .* c1 .* (μ .+ m) .+ im .* c0(μ .+ m, b, Bond, true) .* (μ .+ m)
+		λ₋ = im .* c1 .* (μ .+ m) .- im .* c0(μ .+ m, b, Bond, true) .* (μ .+ m)
+	end
+
 	return μ, λ₊, λ₋
+end
+
+function Iapprox(v, z, nterms)
+
+	# initialize a_0 = 1
+	sum_terms = ones(size(z))
+
+	# compute a_1 -> a_k and sum together
+	for k = 1:(nterms-1)
+
+		# calculate the k-th term
+		a_k = 1 ./ (factorial(k) * 8^k)
+		for j = 1:k
+			a_k *= (4*v^2 - (2*j-1)^2)
+		end
+
+		# sum all k terms together
+		sum_terms += ((-1)^k .* a_k) ./ (z.^k)
+
+	end
+
+    # factor outside of sum
+    leading_term = exp.(z) ./ sqrt.(2*π .* z)
+
+    return leading_term .* sum_terms
+end
+
+function Kapprox(v, z, nterms)
+
+	# initialize a_0 = 1
+	sum_terms = ones(size(z))
+
+	# compute a_1 -> a_k and sum together
+	for k = 1:(nterms-1)
+
+		# calculate the k-th term
+		a_k = 1 ./ (factorial(k) * 8^k)
+		for j = 1:k
+			a_k *= (4*v^2 - (2*j-1)^2)
+		end
+
+		# sum all k terms together
+		sum_terms += a_k ./ (z.^k)
+
+	end
+
+	# factor outside of sum
+	leading_term = sqrt.(π ./ (2 .* z)) .* exp.(-z)
+
+    return leading_term .* sum_terms
 end
 
 ## Matrices
