@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.19.29
+# v0.19.9
 
 using Markdown
 using InteractiveUtils
@@ -399,7 +399,7 @@ begin
 	ylims!(profile_plot, 0.45,1.3)
 
 	xlims!(branch_plot, 0.73,0.82)
-	ylims!(branch_plot, 0.04,0.34)
+	ylims!(branch_plot, 0.001,0.34)
 
 	plot(profile_plot, branch_plot, size=(700,350))
 	# plot(profile_plot, coeff_plot, size=(700,350))
@@ -483,7 +483,7 @@ md"index = $(@bind windex PlutoUI.Slider(1:branchN, show_value = true, default=1
 begin
 	wilton_profile_plot, wilton_branch_plot, wilton_coeff_plot = plotting(wilton_solutions, windex, wilton_constants, false)
 
-	# ylims!(wilton_profile_plot, 0.96,1.050)
+	ylims!(wilton_profile_plot, 0.94,1.04)
 	
 	plot(wilton_profile_plot, wilton_branch_plot, size=(700,350))
 end
