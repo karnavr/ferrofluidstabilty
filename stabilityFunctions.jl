@@ -85,7 +85,7 @@ function stabilityPlots(λ, Nmu)
 		xlabel!(L"\mu")
 
 		# combine into one plot
-		plot(complexPlot, muPlot, size=(700,350))
+		# plot(complexPlot, muPlot, size=(700,350))
 		title!("Nmu = $(Nmu)")
 		
 
