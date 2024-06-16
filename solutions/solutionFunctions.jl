@@ -1,20 +1,48 @@
 using Plots
 using LaTeXStrings
-using ProgressLogging
 
 using SpecialFunctions
 using Trapz
 using LinearAlgebra
 
+using Base.Threads
+
 using DelimitedFiles
+
+## Constants struct
+
+struct Constants
+	N::Int64  					# number of modes for solution S(z)
+	L::Number                   # half-domain length
+	
+	# domain definition
+	dz::Float64 				# domain spacing
+    z::Vector{Float64} 			# domain vector of values (2N + 2 ponts)
+
+	# magnetic constants 
+	B::Float64 					# Bond number 
+	b::Float64 					# inner rod radius
+    E::Float64                  # Bernoulli constant 
+	
+	
+	function Constants(N::Int64, L::Number, B::Float64, b::Float64)
+        dz = 2*L / (2*N+1)
+        z = collect(-L:dz:L)
+		
+        E = 1 - B/2
+
+        new(N, L, dz, z, B, b, E)
+    end
+end
+
 
 ## Main functions
 
 # SOLVERS
 
-function mySolver(f, initial_guess::Vector{Float64}; solver = :Newton, tol::Float64 = 1e-8, max_iter::Int64 = 1000)
+function mySolver(f, initial_guess::Vector{Float64}; solver = :NewtonRaphson, tol::Float64 = 1e-8, max_iter::Int64 = 1000)
 
-	max_iter = 100000  # Maximum number of iterations
+	max_iter = 10000  # Maximum number of iterations
 
 	x = initial_guess
 
@@ -59,11 +87,12 @@ function mySolver(f, initial_guess::Vector{Float64}; solver = :Newton, tol::Floa
 end
 
 function finite_diff_jacobian(f, x)
-    h = 1e-8  # Small perturbation
+    h = 1e-8  # Small perturbation (typically sqrt(machine epsilon))
     n = length(x)
     J = zeros(n, n)
     fx = f(x)
-    for i in 1:n
+
+    Threads.@threads for i in 1:n
         x_perturbed = copy(x)
         x_perturbed[i] += h
         J[:, i] = (f(x_perturbed) - fx) / h
@@ -102,7 +131,7 @@ function equations(unknowns::Vector{Float64}, constants::Constants, a₁::Float6
 
 	one_p = (Szsq).*((c.^2)./2 .- 1 ./ (S.*sqrt.(Szsq)) .+ Szz./(Szsq.^(3/2)) .+ B./(2 .* S.^2) .+ E);
 
-	for n = 1:N
+	Threads.@threads for n = 1:N
 
 		k = n*π/L 
 		
@@ -142,8 +171,8 @@ function bifurcation(initial_guess, a1Vals, branchN, constants, tol = 1e-15)
 		# update intial guess 
 		initial_guess[i+1,:] = solutions[i,:]
 
-        # print progress for every 10th iteration
-        if i % 10 == 0
+        # print progress for every 10% of branch points
+        if i % Int(round(0.1*branchN)) == 0
             println("Branch point $i of $branchN")
         end
 
@@ -227,7 +256,7 @@ function plotting(solutions, index::Int, constants::Constants, shift_profiles = 
 	profiles = zeros(branchN,length(z))
 	
 	# convert profiles
-	for i = 1:branchN
+	Threads.@threads for i = 1:branchN
 		profiles[i,:] .= fourierSeries(coeffs[i,:], z, L)[1]
 	end
 
@@ -252,32 +281,3 @@ function plotting(solutions, index::Int, constants::Constants, shift_profiles = 
 	return profile_plot, branch_plot, coeff_plot
 	
 end
-
-
-## Constants struct
-
-struct Constants
-	N::Int64  					# number of modes for solution S(z)
-	L::Number                   # half-domain length
-	
-	# domain definition
-	dz::Float64 				# domain spacing
-    z::Vector{Float64} 			# domain vector of values (2N + 2 ponts)
-
-	# magnetic constants 
-	B::Float64 					# Bond number 
-	b::Float64 					# inner rod radius
-    E::Float64                  # Bernoulli constant 
-	
-	
-	function Constants(N::Int64, L::Number, B::Float64, b::Float64)
-        dz = 2*L / (2*N+1)
-        z = collect(-L:dz:L)
-		
-        E = 1 - B/2
-
-        new(N, L, dz, z, B, b, E)
-    end
-end
-
-
