@@ -51,7 +51,7 @@ function mySolver(f, initial_guess::Vector{Float64}; solver = :NewtonRaphson, to
 	        δx = -J \ f(x)  # Newton's update step
 	        x += δx
 	        if norm(δx) < tol  # Check for convergence
-	            return x
+	            return x, i
 	        end
 	    end
 	    error("Failed to converge after $max_iter iterations")
@@ -74,7 +74,7 @@ function mySolver(f, initial_guess::Vector{Float64}; solver = :NewtonRaphson, to
 	
 	        x += t * δx  # Update with the found step size
 	        if norm(δx) < tol  # Check for convergence
-	            return x
+	            return x, i
 	        end
 	    end
 	    error("Failed to converge after $max_iter iterations")
@@ -85,7 +85,7 @@ function mySolver(f, initial_guess::Vector{Float64}; solver = :NewtonRaphson, to
 			δx = -J \ f(x)  # Broyden's update step
 			x_new = x + δx
 			if norm(δx) < tol  # Check for convergence
-				return x
+				return x, i
 			end
 			Δf = f(x_new) - f(x)
 			J += (Δf - J * δx) * δx' / (δx' * δx)  # Update Jacobian approximation
@@ -112,7 +112,7 @@ function mySolver(f, initial_guess::Vector{Float64}; solver = :NewtonRaphson, to
 			end
 
 			if norm(δx) < tol  # Check for convergence
-				return x
+				return x, i
 			end
 		end
 		error("Failed to converge after $max_iter iterations")
@@ -130,7 +130,7 @@ function mySolver(f, initial_guess::Vector{Float64}; solver = :NewtonRaphson, to
 			x += δx
 
 			if norm(δx) < tol  # Check for convergence
-				return x
+				return x, i
 			end
 		end
 		error("Failed to converge after $max_iter iterations")
@@ -214,30 +214,33 @@ function bifurcation(initial_guess, a1Vals, branchN, constants, tol = 1e-8, solv
 	
 	# initialize solution array
 	solutions = zeros(branchN, constants.N+2)
+
+	# initialize convergence array
+	iterations = zeros(branchN)
 	
 	for i = 1:branchN
 
 		f(u::Vector{Float64}) = equations(u, constants, a1Vals[i], 1.0)
 
 		# solve for the current branch point + capture
-		solutions[i,:] = mySolver(f, initial_guess[i,:], tol = tol, solver = solver, max_iter = max_iter)
+		solutions[i,:], iterations[i] = mySolver(f, initial_guess[i,:], tol = tol, solver = solver, max_iter = max_iter)
 
 		# update intial guess 
 		initial_guess[i+1,:] = solutions[i,:]
 
         # print progress for every 10% of branch points
         if i % Int(round(0.1*branchN)) == 0
-            println("Branch point $i of $branchN")
+            println("Branch point $i of $branchN, $(Int(iterations[i])) iterations.")
         end
 
-        # zero the last 20% of coefficients on every 10th iteration
+        # zero the last 20% of coefficients on every (0.1*branchN)th iteration
         if i % Int(round(0.1*branchN)) == 0
             initial_guess[i+1, end - Int(round(0.2*length(initial_guess[1,:]))):end] .= 0
         end
 		
 	end
 	
-	return solutions 
+	return solutions, iterations 
 end
 
 
