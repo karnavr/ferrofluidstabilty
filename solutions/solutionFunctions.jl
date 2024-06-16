@@ -79,6 +79,62 @@ function mySolver(f, initial_guess::Vector{Float64}; solver = :NewtonRaphson, to
 	    end
 	    error("Failed to converge after $max_iter iterations")
 
+	elseif solver == :Broyden
+		J = finite_diff_jacobian(f, x)
+		for i in 1:max_iter
+			δx = -J \ f(x)  # Broyden's update step
+			x_new = x + δx
+			if norm(δx) < tol  # Check for convergence
+				return x
+			end
+			Δf = f(x_new) - f(x)
+			J += (Δf - J * δx) * δx' / (δx' * δx)  # Update Jacobian approximation
+			x = x_new
+		end
+		error("Failed to converge after $max_iter iterations")
+
+	elseif solver == :LevenbergMarquardt
+		λ = 1e-3  # Initial damping factor
+		ν = 2.0   # Damping factor increment
+
+		for i in 1:max_iter
+			J = finite_diff_jacobian(f, x)
+			A = J' * J + λ * I  # Levenberg-Marquardt update
+			g = J' * f(x)
+			δx = -A \ g
+
+			x_new = x + δx
+			if norm(f(x_new)) < norm(f(x))  # If the step improves the solution
+				x = x_new
+				λ /= ν
+			else
+				λ *= ν
+			end
+
+			if norm(δx) < tol  # Check for convergence
+				return x
+			end
+		end
+		error("Failed to converge after $max_iter iterations")
+
+	elseif solver == :Secant
+		δx = ones(length(x)) * 1e-4
+		for i in 1:max_iter
+			f_val = f(x)
+			if norm(f_val) < tol
+				return x
+			end
+
+			J_approx = finite_diff_jacobian(f, x, δx)
+			δx = -J_approx \ f_val
+			x += δx
+
+			if norm(δx) < tol  # Check for convergence
+				return x
+			end
+		end
+		error("Failed to converge after $max_iter iterations")
+
 	else
 		error("Enter which algorithm you want to use!")
 	end
