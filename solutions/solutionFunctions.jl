@@ -42,8 +42,6 @@ end
 
 function mySolver(f, initial_guess::Vector{Float64}; solver = :NewtonRaphson, tol::Float64 = 1e-8, max_iter::Int64 = 1000)
 
-	max_iter = 10000  # Maximum number of iterations
-
 	x = initial_guess
 
 	if solver == :Newton
@@ -153,7 +151,7 @@ function equations(unknowns::Vector{Float64}, constants::Constants, a₁::Float6
 	
 end
 
-function bifurcation(initial_guess, a1Vals, branchN, constants, tol = 1e-15)
+function bifurcation(initial_guess, a1Vals, branchN, constants, tol = 1e-8, solver = :NewtonRaphson, max_iter = 1000)
 
 	# compute the birfucation branch for brancN branch points and provided a₁ values, starting at the given intial guess
 
@@ -166,7 +164,7 @@ function bifurcation(initial_guess, a1Vals, branchN, constants, tol = 1e-15)
 		f(u::Vector{Float64}) = equations(u, constants, a1Vals[i], 1.0)
 
 		# solve for the current branch point + capture
-		solutions[i,:] = mySolver(f, initial_guess[i,:], tol = tol)
+		solutions[i,:] = mySolver(f, initial_guess[i,:], tol = tol, solver = solver, max_iter = max_iter)
 
 		# update intial guess 
 		initial_guess[i+1,:] = solutions[i,:]
@@ -218,7 +216,9 @@ function fourierSeries(coefficients::Vector{Float64}, domain, L::Number)
     Sz = zeros(length(domain))  	# first derivative Sz
     Szz = zeros(length(domain))  	# second derivative Szz
 
-    for (i, x) in enumerate(domain)
+    Threads.@threads for i in 1:length(domain)
+
+		x = domain[i]
 		
         # Calculate the series and its derivatives at each point x
         S[i] = coefficients[1] 
