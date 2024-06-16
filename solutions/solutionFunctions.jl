@@ -125,7 +125,7 @@ function mySolver(f, initial_guess::Vector{Float64}; solver = :NewtonRaphson, to
 				return x
 			end
 
-			J_approx = finite_diff_jacobian(f, x, δx)
+			J_approx = finite_diff_jacobian(f, x)
 			δx = -J_approx \ f_val
 			x += δx
 
@@ -231,7 +231,7 @@ function bifurcation(initial_guess, a1Vals, branchN, constants, tol = 1e-8, solv
         end
 
         # zero the last 20% of coefficients on every 10th iteration
-        if i % 10 == 0
+        if i % Int(round(0.1*branchN)) == 0
             initial_guess[i+1, end - Int(round(0.2*length(initial_guess[1,:]))):end] .= 0
         end
 		
