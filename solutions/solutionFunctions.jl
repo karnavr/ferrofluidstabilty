@@ -80,6 +80,7 @@ function mySolver(f, initial_guess::Vector{Float64}; solver = :NewtonRaphson, to
 	    error("Failed to converge after $max_iter iterations")
 
 	elseif solver == :Broyden
+
 		J = finite_diff_jacobian(f, x)
 		for i in 1:max_iter
 			δx = -J \ f(x)  # Broyden's update step
@@ -209,8 +210,16 @@ end
 
 function bifurcation(initial_guess, a1Vals, branchN, constants, tol = 1e-8, solver = :NewtonRaphson, max_iter = 1000)
 
-	# compute the birfucation branch for brancN branch points and provided a₁ values, starting at the given intial guess
+	# compute the bifurcation branch for branchN branch points and provided a₁ values, starting at the given intial guess
 
+	# create base file name (num_modes).(tolerance).(branchN).(solver).(max_iter)
+	base_name = "$(constants.N).$(tol).$(branchN).$(solver).$(max_iter)"
+
+	# check if the directory exists -> if it does, display a warning
+	if isdir("results/$(base_name)")
+		println("Warning: Solution branch already exists. Overwriting files.")
+		# NOTE: will have to eventually add a check for all the constants, etc.
+	end
 	
 	# initialize solution array
 	solutions = zeros(branchN, constants.N+2)
@@ -236,6 +245,33 @@ function bifurcation(initial_guess, a1Vals, branchN, constants, tol = 1e-8, solv
         end
 		
 	end
+
+	# compute error for each branch point
+	errors = zeros(branchN)
+
+	Threads.@threads for i = 1:branchN
+		errors[i] = norm(equations(solutions[i,:], constants, a1Vals[i], 1.0))
+	end
+
+
+
+	## SAVING RESULTS
+	# if directory exists, delete it
+	if isdir("results/$(base_name)")
+		rm("results/$(base_name)"; recursive = true)
+	end
+
+	# create directory to save results
+	mkdir("results/$(base_name)")
+
+	# save solutions, iterations and a1_vals to seperate files 
+	writedlm("results/$(base_name)/solutions_$base_name.dat", solutions)
+
+	# save all metadata (constants + solver/solution parameters) to a csv file (with labels)
+	# each line is the name followed by the value
+	csv_data = ["N, $(constants.N)"; "L, $(constants.L)"; "B, $(constants.B)"; "b, $(constants.b)"; "E, $(constants.E)"; "tol, $tol"; "branchN, $branchN"; "solver, $solver"; "max_iter, $max_iter"; "initial_guess, $(initial_guess[1,:])"; "a1Vals, $a1Vals"; "iterations, $iterations"; "errors, $errors"]
+	writedlm("results/$(base_name)/meta_$base_name.csv", csv_data, ',')
+
 	
 	return solutions, iterations 
 end
