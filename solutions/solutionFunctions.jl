@@ -8,6 +8,7 @@ using LinearAlgebra
 using Base.Threads
 
 using DelimitedFiles
+using JSON
 
 ## Constants struct
 
@@ -213,7 +214,8 @@ function bifurcation(initial_guess, a1Vals, branchN, constants, tol = 1e-8, solv
 	# compute the bifurcation branch for branchN branch points and provided a₁ values, starting at the given intial guess
 
 	# create base file name (num_modes).(tolerance).(branchN).(solver).(max_iter)
-	base_name = "$(constants.N).$(tol).$(branchN).$(solver).$(max_iter)"
+	base_name = "$(constants.N).$(tol).$(branchN).$(solver)"
+	println("$(base_name)")
 
 	# check if the directory exists -> if it does, display a warning
 	if isdir("results/$(base_name)")
@@ -269,11 +271,30 @@ function bifurcation(initial_guess, a1Vals, branchN, constants, tol = 1e-8, solv
 
 	# save all metadata (constants + solver/solution parameters) to a csv file (with labels)
 	# each line is the name followed by the value
-	csv_data = ["N, $(constants.N)"; "L, $(constants.L)"; "B, $(constants.B)"; "b, $(constants.b)"; "E, $(constants.E)"; "tol, $tol"; "branchN, $branchN"; "solver, $solver"; "max_iter, $max_iter"; "initial_guess, $(initial_guess[1,:])"; "a1Vals, $a1Vals"; "iterations, $iterations"; "errors, $errors"]
-	writedlm("results/$(base_name)/meta_$base_name.csv", csv_data, ',')
-
 	
-	return solutions, iterations 
+	meta = Dict( # Create a dictionary with the data
+		"N" => constants.N,
+		"L" => constants.L,
+		"B" => constants.B,
+		"b" => constants.b,
+		"E" => constants.E,
+		"tol" => tol,
+		"branchN" => branchN,
+		"solver" => solver,
+		"max_iter" => max_iter,
+		"initial_guess" => initial_guess[1,:],
+		"a1Vals" => a1Vals,
+		"iterations" => iterations,
+		"errors" => errors
+	)
+
+	# Write the dictionary to a JSON file
+	open("results/$(base_name)/meta_$base_name.json", "w") do f
+		JSON.print(f, meta)
+	end
+
+
+	return solutions, iterations
 end
 
 
@@ -308,7 +329,7 @@ function fourierSeries(coefficients::Vector{Float64}, domain, L::Number)
     Sz = zeros(length(domain))  	# first derivative Sz
     Szz = zeros(length(domain))  	# second derivative Szz
 
-    Threads.@threads for i in 1:length(domain)
+    Threads.@threads for i in 1:Int(length(domain))
 
 		x = domain[i]
 		
@@ -372,4 +393,21 @@ function plotting(solutions, index::Int, constants::Constants, shift_profiles = 
 
 	return profile_plot, branch_plot, coeff_plot
 	
+end
+
+function plotting(solution_file::String)
+
+	# load solutions
+	solutions = readdlm("results/$(solution_file)/solutions_$(solution_file).dat")
+
+	# load metadata
+	meta = JSON.parsefile("results/$(solution_file)/meta_$(solution_file).json")
+
+	# create constants
+	constants = Constants(meta["N"], meta["L"], meta["B"], meta["b"])
+
+	profile_plot, branch_plot, coeff_plot = plotting(solutions, meta["branchN"], constants)
+	convergence_plot = plot(meta["iterations"], xlabel="Branch point", ylabel="Iterations", legend=false, seriestype = :line, marker = :dot, markersize = 2)
+
+	return profile_plot, branch_plot, coeff_plot, convergence_plot
 end
