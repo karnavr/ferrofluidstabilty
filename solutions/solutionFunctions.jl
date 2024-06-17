@@ -228,14 +228,11 @@ function bifurcation(initial_guess, a1Vals, branchN, constants, tol = 1e-8, solv
 		# update intial guess 
 		initial_guess[i+1,:] = solutions[i,:]
 
-        # print progress for every 10% of branch points
+        # print progress for every 10% of branch points and;
+		# zero the last 20% of coefficients on every (0.1*branchN)th iteration
         if i % Int(round(0.1*branchN)) == 0
             println("Branch point $i of $branchN, $(Int(iterations[i])) iterations.")
-        end
-
-        # zero the last 20% of coefficients on every (0.1*branchN)th iteration
-        if i % Int(round(0.1*branchN)) == 0
-            initial_guess[i+1, end - Int(round(0.2*length(initial_guess[1,:]))):end] .= 0
+			initial_guess[i+1, end - Int(round(0.2*length(initial_guess[1,:]))):end] .= 0
         end
 		
 	end
