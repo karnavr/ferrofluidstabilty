@@ -407,7 +407,8 @@ function plotting(solution_file::String)
 	constants = Constants(meta["N"], meta["L"], meta["B"], meta["b"])
 
 	profile_plot, branch_plot, coeff_plot = plotting(solutions, meta["branchN"], constants)
-	convergence_plot = plot(meta["iterations"], xlabel="Branch point", ylabel="Iterations", legend=false, seriestype = :line, marker = :dot, markersize = 2)
+	convergence_plot = plot((meta["a1Vals"])[1:end-1], meta["iterations"], xlabel=L"a_1", ylabel="Iterations", legend=false, seriestype = :line, marker = :dot, markersize = 2)
+	error_plot = plot((meta["a1Vals"])[1:end-1], meta["errors"], xlabel=L"a_1", ylabel="Error", title = "tol = $(meta["tol"])", legend=false, seriestype = :line, marker = :dot, markersize = 2, yaxis=:log10)
 
-	return profile_plot, branch_plot, coeff_plot, convergence_plot
+	return profile_plot, branch_plot, coeff_plot, convergence_plot, error_plot
 end
