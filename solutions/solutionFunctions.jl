@@ -120,17 +120,20 @@ end
 function Broyden(f, x::Vector{Float64}; tol::Float64 = 1e-8, max_iter::Int64 = 1000)
 
 	J = finite_diff_jacobian(f, x)
+
 		for i in 1:max_iter
 			δx = -J \ f(x)  # Broyden's update step
 			x_new = x + δx
 			if norm(δx) < tol  # Check for convergence
-				return x, i
+				return x, i, 0
 			end
 			Δf = f(x_new) - f(x)
 			J += (Δf - J * δx) * δx' / (δx' * δx)  # Update Jacobian approximation
 			x = x_new
 		end
-		error("Failed to converge after $max_iter iterations")
+
+		println("Failed to converge after $max_iter iterations, returning last computed solution.")
+		return x, max_iter, 1
 
 end
 
@@ -255,13 +258,16 @@ function bifurcation(initial_guess, a1Vals, branchN, constants, tol = 1e-8, solv
 
 	# initialize convergence array
 	iterations = zeros(branchN)
+
+	# initialize flags array
+	flags = randn(branchN)
 	
 	for i = 1:branchN
 
 		f(u::Vector{Float64}) = equations(u, constants, a1Vals[i], 1.0)
 
 		# solve for the current branch point + capture
-		solutions[i,:], iterations[i] = mySolver(f, initial_guess[i,:], tol = tol, solver = solver, max_iter = max_iter)
+		solutions[i,:], iterations[i], flags[i] = mySolver(f, initial_guess[i,:], tol = tol, solver = solver, max_iter = max_iter)
 
 		# update intial guess 
 		initial_guess[i+1,:] = solutions[i,:]
@@ -318,7 +324,8 @@ function bifurcation(initial_guess, a1Vals, branchN, constants, tol = 1e-8, solv
 		"initial_guess" => initial_guess[1,:],
 		"a1Vals" => a1Vals,
 		"iterations" => iterations,
-		"errors" => errors
+		"errors" => errors, 
+		"flags" => flags
 	)
 
 	# Write the dictionary to a JSON file
@@ -442,6 +449,7 @@ function plotting(solution_file::String)
 	profile_plot, branch_plot, coeff_plot = plotting(solutions, meta["branchN"], constants)
 	convergence_plot = plot((meta["a1Vals"])[1:end-1], meta["iterations"], xlabel=L"a_1", ylabel="Iterations", legend=false, seriestype = :line, marker = :dot, markersize = 2)
 	error_plot = plot((meta["a1Vals"])[1:end-1], meta["errors"], xlabel=L"a_1", ylabel="Error", title = "tol = $(meta["tol"])", legend=false, seriestype = :line, marker = :dot, markersize = 2, yaxis=:log10)
+	flag_plot = plot((meta["a1Vals"])[1:end-1], meta["flags"], xlabel=L"a_1", ylabel="Flag", legend=false, seriestype = :line, marker = :dot, markersize = 2)
 
-	return profile_plot, branch_plot, coeff_plot, convergence_plot, error_plot
+	return profile_plot, branch_plot, coeff_plot, convergence_plot, error_plot, flag_plot
 end
