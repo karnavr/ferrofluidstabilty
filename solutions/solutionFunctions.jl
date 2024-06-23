@@ -3,6 +3,7 @@ using Plots, LaTeXStrings
 using SpecialFunctions
 using Trapz
 using LinearAlgebra
+using Statistics
 
 using DelimitedFiles, JSON
 
@@ -39,46 +40,86 @@ end
 
 function mySolver(f, initial_guess::Vector{Float64}; solver = :NewtonRaphson, tol::Float64 = 1e-8, max_iter::Int64 = 1000)
 
+	## Solves the system of equations f(x) = 0 using the specified solver (wrapper function)
+
 	x = initial_guess
 
 	if solver == :Newton
-		
-	    for i in 1:max_iter
-	        J = finite_diff_jacobian(f, x)
-	        δx = -J \ f(x)  # Newton's update step
-	        x += δx
-	        if norm(δx) < tol  # Check for convergence
-	            return x, i
-	        end
-	    end
-	    error("Failed to converge after $max_iter iterations")
+		Newton(f, x, tol = tol, max_iter = max_iter)
 
 	elseif solver == :NewtonRaphson 
-	    
-	    # alpha = 1.0  # Initial step size
-	    c = 1e-4  # Sufficient decrease parameter
-	    rho = 0.5  # Step size reduction factor
-		
-	    for i in 1:max_iter
-	        J = finite_diff_jacobian(f, x)
-	        δx = -J \ f(x)  # Newton's update step
-	        t = 1.0  # Initialize step size
-	
-	        # Backtracking line search
-	        while norm(f(x + t * δx)) > norm(f(x)) + c * t * dot(f(x), δx)
-	            t *= rho
-	        end
-	
-	        x += t * δx  # Update with the found step size
-	        if norm(δx) < tol  # Check for convergence
-	            return x, i
-	        end
-	    end
-	    error("Failed to converge after $max_iter iterations")
+	    NewtonRaphson(f, x, tol = tol, max_iter = max_iter)
 
 	elseif solver == :Broyden
+		Broyden(f, x, tol = tol, max_iter = max_iter)
 
+	elseif solver == :LevenbergMarquardt
+		LevenbergMarquardt(f, x, tol = tol, max_iter = max_iter)
+
+	elseif solver == :Secant
+		Secant(f, x, tol = tol, max_iter = max_iter)
+
+	else
+		error("Enter which algorithm you want to use!")
+	end
+end
+
+function finite_diff_jacobian(f, x)
+    h = 1e-8  # Small perturbation (typically sqrt(machine epsilon))
+    n = length(x)
+    J = zeros(n, n)
+    fx = f(x)
+
+    Threads.@threads for i in 1:n
+        x_perturbed = copy(x)
+        x_perturbed[i] += h
+        J[:, i] = (f(x_perturbed) - fx) / h
+    end
+    return J
+end
+
+function Newton(f, x::Vector{Float64}; tol::Float64 = 1e-8, max_iter::Int64 = 1000)
+
+	for i in 1:max_iter
 		J = finite_diff_jacobian(f, x)
+		δx = -J \ f(x)  # Newton's update step
+		x += δx
+		if norm(δx) < tol  # Check for convergence
+			return x, i
+		end
+	end
+	error("Failed to converge after $max_iter iterations")
+
+end
+
+function NewtonRaphson(f, x::Vector{Float64}; tol::Float64 = 1e-8, max_iter::Int64 = 1000)
+
+	# alpha = 1.0  # Initial step size
+	c = 1e-4  # Sufficient decrease parameter
+	rho = 0.5  # Step size reduction factor
+	
+	for i in 1:max_iter
+		J = finite_diff_jacobian(f, x)
+		δx = -J \ f(x)  # Newton's update step
+		t = 1.0  # Initialize step size
+
+		# Backtracking line search
+		while norm(f(x + t * δx)) > norm(f(x)) + c * t * dot(f(x), δx)
+			t *= rho
+		end
+
+		x += t * δx  # Update with the found step size
+		if norm(δx) < tol  # Check for convergence
+			return x, i
+		end
+	end
+	error("Failed to converge after $max_iter iterations")
+
+end
+
+function Broyden(f, x::Vector{Float64}; tol::Float64 = 1e-8, max_iter::Int64 = 1000)
+
+	J = finite_diff_jacobian(f, x)
 		for i in 1:max_iter
 			δx = -J \ f(x)  # Broyden's update step
 			x_new = x + δx
@@ -91,8 +132,11 @@ function mySolver(f, initial_guess::Vector{Float64}; solver = :NewtonRaphson, to
 		end
 		error("Failed to converge after $max_iter iterations")
 
-	elseif solver == :LevenbergMarquardt
-		λ = 1e-3  # Initial damping factor
+end
+
+function LevenbergMarquardt(f, x::Vector{Float64}; tol::Float64 = 1e-8, max_iter::Int64 = 1000)
+
+	λ = 1e-3  # Initial damping factor
 		ν = 2.0   # Damping factor increment
 
 		for i in 1:max_iter
@@ -115,8 +159,11 @@ function mySolver(f, initial_guess::Vector{Float64}; solver = :NewtonRaphson, to
 		end
 		error("Failed to converge after $max_iter iterations")
 
-	elseif solver == :Secant
-		δx = ones(length(x)) * 1e-4
+end
+
+function Secant(f, x::Vector{Float64}; tol::Float64 = 1e-8, max_iter::Int64 = 1000)
+
+	δx = ones(length(x)) * 1e-4
 		for i in 1:max_iter
 			f_val = f(x)
 			if norm(f_val) < tol
@@ -133,25 +180,7 @@ function mySolver(f, initial_guess::Vector{Float64}; solver = :NewtonRaphson, to
 		end
 		error("Failed to converge after $max_iter iterations")
 
-	else
-		error("Enter which algorithm you want to use!")
-	end
 end
-
-function finite_diff_jacobian(f, x)
-    h = 1e-8  # Small perturbation (typically sqrt(machine epsilon))
-    n = length(x)
-    J = zeros(n, n)
-    fx = f(x)
-
-    Threads.@threads for i in 1:n
-        x_perturbed = copy(x)
-        x_perturbed[i] += h
-        J[:, i] = (f(x_perturbed) - fx) / h
-    end
-    return J
-end
-
 
 
 # PROBLEM FUNCTIONS
@@ -237,13 +266,20 @@ function bifurcation(initial_guess, a1Vals, branchN, constants, tol = 1e-8, solv
 		# update intial guess 
 		initial_guess[i+1,:] = solutions[i,:]
 
-        # print progress for every 10% of branch points and;
-		# zero the last 20% of coefficients on every (0.1*branchN)th iteration
+        # print progress for every 10% of branch points 
         if i % Int(round(0.1*branchN)) == 0
             println("Branch point $i of $branchN, $(Int(iterations[i])) iterations.")
-			initial_guess[i+1, end - Int(round(0.2*length(initial_guess[1,:]))):end] .= 0
+			# initial_guess[i+1, end - Int(round(0.2*length(initial_guess[1,:]))):end] .= 0
         end
-		
+
+		# check the average values of the last 20% of coefficients every 1% of branch points
+		# and if it's above 1e-15, zero the last 20% of coefficients
+		if i % Int(round(0.01*branchN)) == 0
+			if mean(abs.(initial_guess[i, end - Int(round(0.2*length(initial_guess[1,:]))):end])) > 1e-15
+				initial_guess[i+1, end - Int(round(0.2*length(initial_guess[1,:]))):end] .= 0
+			end
+		end
+
 	end
 
 	# compute error for each branch point
