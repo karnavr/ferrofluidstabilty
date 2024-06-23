@@ -1,14 +1,10 @@
-using Plots
-using LaTeXStrings
+using Plots, LaTeXStrings
 
 using SpecialFunctions
 using Trapz
 using LinearAlgebra
 
-using Base.Threads
-
-using DelimitedFiles
-using JSON
+using DelimitedFiles, JSON
 
 ## Constants struct
 
@@ -156,6 +152,8 @@ function finite_diff_jacobian(f, x)
     return J
 end
 
+
+
 # PROBLEM FUNCTIONS
 
 function equations(unknowns::Vector{Float64}, constants::Constants, a₁::Float64, a₀::Float64)
@@ -192,7 +190,7 @@ function equations(unknowns::Vector{Float64}, constants::Constants, a₁::Float6
 		k = n*π/L 
 		
 	    one = k .* S .* sqrt.(Complex.(one_p))
-	    two = besselk.(1, k * b) .* besseli.(1, k .* S) .- besseli.(1, k * b) .* besselk.(1, k .* S)
+	    two = besselk.(1, Complex.(k * b)) .* besseli.(1, Complex.(k .* S)) .- besseli.(1, Complex.(k * b)) .* besselk.(1, Complex.(k .* S))
 		
 	    integrands[n, :] = real.(one .* two)
 		
@@ -256,7 +254,6 @@ function bifurcation(initial_guess, a1Vals, branchN, constants, tol = 1e-8, solv
 	end
 
 
-
 	## SAVING RESULTS
 	# if directory exists, delete it
 	if isdir("results/$(base_name)")
@@ -315,10 +312,10 @@ end
 
 function β(n, k, b, S0)
 
-	beta1 = besseli.(1, k*b) .* besselk.(n, k.*S0)
-	beta2 = (-1)^n .* besselk.(1, k*b) .* besseli.(n, k.*S0)
+	beta1 = besseli.(1, complex(k*b)) .* besselk.(n, complex(k.*S0))
+	beta2 = (-1)^n .* besselk.(1, complex(k*b)) .* besseli.(n, complex(k.*S0))
 
-	return beta1 + beta2
+	return real(beta1 + beta2)
 end
 
 function fourierSeries(coefficients::Vector{Float64}, domain, L::Number)

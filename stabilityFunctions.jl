@@ -89,7 +89,7 @@ function stabilityPlots(λ, Nmu)
 		title!("Nmu = $(Nmu)")
 		
 
-	return plot(complexPlot, muPlot, size=(700,350))
+	return complexPlot, muPlot
 end
 
 # Define a CUDA kernel for computing the maximum real part
