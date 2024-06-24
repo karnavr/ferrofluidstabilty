@@ -190,7 +190,7 @@ end
 
 function equations(unknowns::Vector{Float64}, constants::Constants, a₁::Float64, a₀::Float64)
 
-	# Returns the $N + 2$ equations that we want to solve for:
+	# Returns the N + 2 equations that we want to solve for:
 
 	# problem constants 
 	z = constants.z
@@ -264,7 +264,7 @@ function bifurcation(initial_guess, a1Vals, branchN, constants, tol = 1e-8, solv
 	
 	for i = 1:branchN
 
-		f(u::Vector{Float64}) = equations(u, constants, a1Vals[i], 1.0)
+		f(u::Vector{Float64}) = equations(u, constants, a1Vals[i], 1.0) # define the set of equations/function to solve f(x) = 0
 
 		# solve for the current branch point + capture
 		solutions[i,:], iterations[i], flags[i] = mySolver(f, initial_guess[i,:], tol = tol, solver = solver, max_iter = max_iter)
@@ -280,7 +280,7 @@ function bifurcation(initial_guess, a1Vals, branchN, constants, tol = 1e-8, solv
 
 		# check the average values of the last 20% of coefficients every 1% of branch points
 		# and if it's above 1e-15, zero the last 20% of coefficients
-		if i % Int(round(0.01*branchN)) == 0
+		if i % max(1, Int(round(0.01*branchN))) == 0 # max() to ensure it's always greater than 1
 			if mean(abs.(initial_guess[i, end - Int(round(0.2*length(initial_guess[1,:]))):end])) > 1e-15
 				initial_guess[i+1, end - Int(round(0.2*length(initial_guess[1,:]))):end] .= 0
 			end
@@ -308,9 +308,7 @@ function bifurcation(initial_guess, a1Vals, branchN, constants, tol = 1e-8, solv
 	# save solutions, iterations and a1_vals to seperate files 
 	writedlm("results/$(base_name)/solutions_$base_name.dat", solutions)
 
-	# save all metadata (constants + solver/solution parameters) to a csv file (with labels)
-	# each line is the name followed by the value
-	
+	# create a dictionary to save the solution metadata (constants + solver/solution parameters)
 	meta = Dict( # Create a dictionary with the data
 		"N" => constants.N,
 		"L" => constants.L,
@@ -358,7 +356,7 @@ function β(n, k, b, S0)
 	beta1 = besseli.(1, complex(k*b)) .* besselk.(n, complex(k.*S0))
 	beta2 = (-1)^n .* besselk.(1, complex(k*b)) .* besseli.(n, complex(k.*S0))
 
-	return real(beta1 + beta2)
+	return real.(beta1 .+ beta2)
 end
 
 function fourierSeries(coefficients::Vector{Float64}, domain, L::Number)
