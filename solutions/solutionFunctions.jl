@@ -15,7 +15,7 @@ struct Constants
 	
 	# domain definition
 	dz::Float64 				# domain spacing
-    z::Vector{Float64} 			# domain vector of values (2N + 2 ponts)
+    z::Vector{Float64} 			# domain vector of values (2N + 2 points)
 
 	# magnetic constants 
 	B::Float64 					# Bond number 
@@ -85,10 +85,12 @@ function Newton(f, x::Vector{Float64}; tol::Float64 = 1e-8, max_iter::Int64 = 10
 		δx = -J \ f(x)  # Newton's update step
 		x += δx
 		if norm(δx) < tol  # Check for convergence
-			return x, i
+			return x, i, 0
 		end
 	end
-	error("Failed to converge after $max_iter iterations")
+	
+	println("Failed to converge after $max_iter iterations, returning last computed solution.")
+	return x, max_iter, 1
 
 end
 
@@ -110,10 +112,12 @@ function NewtonRaphson(f, x::Vector{Float64}; tol::Float64 = 1e-8, max_iter::Int
 
 		x += t * δx  # Update with the found step size
 		if norm(δx) < tol  # Check for convergence
-			return x, i
+			return x, i, 0
 		end
 	end
-	error("Failed to converge after $max_iter iterations")
+	
+	println("Failed to converge after $max_iter iterations, returning last computed solution.")
+	return x, max_iter, 1
 
 end
 
@@ -157,10 +161,12 @@ function LevenbergMarquardt(f, x::Vector{Float64}; tol::Float64 = 1e-8, max_iter
 			end
 
 			if norm(δx) < tol  # Check for convergence
-				return x, i
+				return x, i, 0
 			end
 		end
-		error("Failed to converge after $max_iter iterations")
+		
+		println("Failed to converge after $max_iter iterations, returning last computed solution.")
+		return x, max_iter, 1
 
 end
 
@@ -239,7 +245,7 @@ function equations(unknowns::Vector{Float64}, constants::Constants, a₁::Float6
 	
 end
 
-function bifurcation(initial_guess, a1Vals, branchN, constants, tol = 1e-8, solver = :NewtonRaphson, max_iter = 1000)
+function bifurcation(initial_guess, a1Vals, branchN, constants; tol = 1e-8, solver = :NewtonRaphson, max_iter = 1000)
 
 	# compute the bifurcation branch for branchN branch points and provided a₁ values, starting at the given intial guess
 
@@ -264,7 +270,7 @@ function bifurcation(initial_guess, a1Vals, branchN, constants, tol = 1e-8, solv
 	
 	for i = 1:branchN
 
-		f(u::Vector{Float64}) = equations(u, constants, a1Vals[i], 1.0) # define the set of equations/function to solve f(x) = 0
+		f(u::Vector{Float64}) = equations(u, constants, a1Vals[i], 1.0) # define the set of equations/function to solve: f(x) = 0
 
 		# solve for the current branch point + capture
 		solutions[i,:], iterations[i], flags[i] = mySolver(f, initial_guess[i,:], tol = tol, solver = solver, max_iter = max_iter)
