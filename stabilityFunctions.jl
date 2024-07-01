@@ -1,14 +1,17 @@
-using Plots
+using Plots, LaTeXStrings
+
 using LinearAlgebra
 using SpecialFunctions
-using LaTeXStrings
+
 using Trapz
 using DelimitedFiles
 using CUDA
 
+using Arpack 
+
 ## Solvers 
 
-function solveGenEig(solution, Nmodes, Nmu)
+function solveGenEig(solution, Nmodes, Nmu; largest = false)
 
     # constants
     Bond = 1.5
@@ -31,33 +34,66 @@ function solveGenEig(solution, Nmodes, Nmu)
 
 	# set up stability stuff
 	μ = collect(range(0.001,1.0,Nmu))
-	λ = zeros(ComplexF64, 4*N+2, length(μ))
 
 	# create matrices that stay constant (don't depend on μ)
 	A = Ag(N, z, S0z, q0z, c)
 	B = Bg(N, z)
 	D = zeros(2N+1,2N+1)
-	
-	
-	Threads.@threads for i = 1:Nmu
 
-		# create matrices
-		E = Eg(N, z, S0, S0z, S0zz, q0z, c, Bond, μ[i])
-		F = Fg(N, z, S0, S0z, q0z, c, μ[i])
-	
-		C = Cg(N, z, S0, b, μ[i])
-		G = Gg(N, z, S0, S0z, q0z, b, c, μ[i])
-		H = Hg(N, z, S0, b, μ[i])
-	
-		lhs = [A B; C D]
-	    rhs = [E F; G H]
+	if largest == true
+
+		λ = zeros(ComplexF64, length(μ))
+
+		for i = 1:Nmu
+
+			# create matrices
+			E = Eg(N, z, S0, S0z, S0zz, q0z, c, Bond, μ[i])
+			F = Fg(N, z, S0, S0z, q0z, c, μ[i])
 		
-		# solve problem 
-		solutions = eigen(rhs, lhs)
+			C = Cg(N, z, S0, b, μ[i])
+			G = Gg(N, z, S0, S0z, q0z, b, c, μ[i])
+			H = Hg(N, z, S0, b, μ[i])
 		
-		# save solution
-		λ[:,i] = (solutions.values)
-	
+			lhs = [A B; C D]
+			rhs = [E F; G H]
+			
+			# solve problem 
+			solution, ϕ	= eigs(rhs, lhs, nev = 1, which = :LR)
+
+			λ[i] = solution[1]
+
+			# print progress 
+			if i % 100 == 0
+				println("$(i) out of $(Nmu) solved")
+			end
+
+		end
+
+	else
+
+		λ = zeros(ComplexF64, 4*N+2, length(μ))
+
+		Threads.@threads for i = 1:Nmu
+
+			# create matrices
+			E = Eg(N, z, S0, S0z, S0zz, q0z, c, Bond, μ[i])
+			F = Fg(N, z, S0, S0z, q0z, c, μ[i])
+		
+			C = Cg(N, z, S0, b, μ[i])
+			G = Gg(N, z, S0, S0z, q0z, b, c, μ[i])
+			H = Hg(N, z, S0, b, μ[i])
+		
+			lhs = [A B; C D]
+			rhs = [E F; G H]
+			
+			# solve problem 
+			solutions = eigen(rhs, lhs)
+			
+			# save solution
+			λ[:,i] = (solutions.values)
+		
+		end
+
 	end
 
 	# save solution to csv file

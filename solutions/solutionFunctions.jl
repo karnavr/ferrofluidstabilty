@@ -359,8 +359,8 @@ end
 
 function β(n, k, b, S0)
 
-	beta1 = besseli.(1, complex(k*b)) .* besselk.(n, complex(k.*S0))
-	beta2 = (-1)^n .* besselk.(1, complex(k*b)) .* besseli.(n, complex(k.*S0))
+	beta1 = besseli.(1, complex.(k*b)) .* besselk.(n, complex.(k.*S0))
+	beta2 = (-1)^n .* besselk.(1, complex.(k*b)) .* besseli.(n, complex.(k.*S0))
 
 	return real.(beta1 .+ beta2)
 end
@@ -453,7 +453,7 @@ function plotting(solution_file::String)
 	profile_plot, branch_plot, coeff_plot = plotting(solutions, meta["branchN"], constants)
 	convergence_plot = plot((meta["a1Vals"])[1:end-1], meta["iterations"], xlabel=L"a_1", ylabel="Iterations", legend=false, seriestype = :line, marker = :dot, markersize = 2)
 	error_plot = plot((meta["a1Vals"])[1:end-1], meta["errors"], xlabel=L"a_1", ylabel="Error", title = "tol = $(meta["tol"])", legend=false, seriestype = :line, marker = :dot, markersize = 2, yaxis=:log10)
-	flag_plot = plot((meta["a1Vals"])[1:end-1], meta["flags"], xlabel=L"a_1", ylabel="Flag", legend=false, seriestype = :line, marker = :dot, markersize = 2)
+	# flag_plot = plot((meta["a1Vals"])[1:end-1], meta["flags"], xlabel=L"a_1", ylabel="Flag", legend=false, seriestype = :line, marker = :dot, markersize = 2)
 
-	return profile_plot, branch_plot, coeff_plot, convergence_plot, error_plot, flag_plot
+	return profile_plot, branch_plot, coeff_plot, convergence_plot, error_plot
 end
