@@ -65,6 +65,9 @@ function mySolver(f, initial_guess::Vector{Float64}; solver = :NewtonRaphson, to
 end
 
 function finite_diff_jacobian(f, x)
+
+	## Computes the Jacobian of the function f at the point x using finite differences
+
     h = 1e-8  # Small perturbation (typically sqrt(machine epsilon))
     n = length(x)
     J = zeros(n, n)
@@ -199,12 +202,12 @@ function equations(unknowns::Vector{Float64}, constants::Constants, a₁::Float6
 	# Returns the N + 2 equations that we want to solve for:
 
 	# problem constants 
-	z = constants.z
-	N = constants.N
-	B = constants.B
-	b = constants.b
-	E = constants.E
-	L = constants.L
+	z = constants.z::Vector{Float64}
+	N = constants.N::Int64
+	B = constants.B::Float64
+	b = constants.b::Float64
+	E = constants.E::Float64
+	L = constants.L::Float64
 
 	c = unknowns[1]
 	coeffs = unknowns[2:N+2] # N + 1 coeffs
@@ -215,10 +218,10 @@ function equations(unknowns::Vector{Float64}, constants::Constants, a₁::Float6
 	S, Sz, Szz = fourierSeries(coeffs, z, L)
 
 	integrands = zeros(N, length(z)) # N integrands for k = 1:N
-	integrals = zeros(N) # N integrals (array gets condensed on the z-axis)
-	eqs = zeros(N+2) # integrands + 2 extra equations I define later
+	integrals = zeros(N) 			 # N integrals (array gets condensed on the z-axis)
+	eqs = zeros(N+2) 				 # integrands + 2 extra equations I define later
 
-	# define common factors in equations 
+	# define common factor in equations 
 	Szsq = 1 .+ (Sz.^2);
 
 	one_p = (Szsq).*((c.^2)./2 .- 1 ./ (S.*sqrt.(Szsq)) .+ Szz./(Szsq.^(3/2)) .+ B./(2 .* S.^2) .+ E);
@@ -235,6 +238,7 @@ function equations(unknowns::Vector{Float64}, constants::Constants, a₁::Float6
 	    # Normalize the integrand before integration to prevent numerical issues
 	    integrands[n, :] ./= maximum(abs.(integrands[n, :]))
 	    integrals[n] = trapz(z, integrands[n, :] .* cos.(k .* z))
+
 	end
 
 	eqs[1:N] = real.(integrals)
@@ -245,9 +249,9 @@ function equations(unknowns::Vector{Float64}, constants::Constants, a₁::Float6
 	
 end
 
-function bifurcation(initial_guess, a1Vals, branchN, constants; tol = 1e-8, solver = :NewtonRaphson, max_iter = 1000)
+function bifurcation(initial_guess::Vector{Float64}, a1Vals::Vector{Float64}, branchN::Int64, constants::Constants; tol = 1e-8, solver = :NewtonRaphson, max_iter = 1000)
 
-	# compute the bifurcation branch for branchN branch points and provided a₁ values, starting at the given intial guess
+	## compute the bifurcation branch for branchN branch points and provided a₁ values, starting at the given intial guess
 
 	# create base file name (num_modes).(tolerance).(branchN).(solver).(max_iter)
 	base_name = "$(constants.N).$(tol).$(branchN).$(solver)"
@@ -270,7 +274,8 @@ function bifurcation(initial_guess, a1Vals, branchN, constants; tol = 1e-8, solv
 	
 	for i = 1:branchN
 
-		f(u::Vector{Float64}) = equations(u, constants, a1Vals[i], 1.0) # define the set of equations/function to solve: f(x) = 0
+		# define the set of equations/function to solve: f(x) = 0
+		f(u::Vector{Float64}) = equations(u, constants, a1Vals[i], 1.0) 
 
 		# solve for the current branch point + capture
 		solutions[i,:], iterations[i], flags[i] = mySolver(f, initial_guess[i,:], tol = tol, solver = solver, max_iter = max_iter)
@@ -346,7 +351,7 @@ end
 ## Helper functions
 
 function c0(k, constants::Constants)
-	# linearized wave speed for small amplitude waves c(k)
+	## linearized wave speed for small amplitude waves c(k)
 
 	B = constants.B
 	b = constants.b
@@ -370,7 +375,7 @@ function fourierSeries(coefficients::Vector{Float64}, domain, L::Number)
     N = length(coefficients) - 1
 	
     S = zeros(length(domain))  		# profile S
-    Sz = zeros(length(domain))  	# first derivative Sz
+    Sz = zeros(length(domain))  	# first derivative Sz	
     Szz = zeros(length(domain))  	# second derivative Szz
 
     Threads.@threads for i in 1:Int(length(domain))
@@ -400,7 +405,6 @@ function plotting(solutions, index::Int, constants::Constants, shift_profiles = 
 
 	# un-pack constants 
 	z = constants.z
-	N = constants.N
 	L = constants.L
 
 	branchN = length(solutions[:,1])
