@@ -207,7 +207,7 @@ function equations(unknowns::Vector{Float64}, constants::Constants, a₁::Float6
 	B = constants.B::Float64
 	b = constants.b::Float64
 	E = constants.E::Float64
-	L = constants.L::Float64
+	L = constants.L::Number
 
 	c = unknowns[1]
 	coeffs = unknowns[2:N+2] # N + 1 coeffs
@@ -249,7 +249,7 @@ function equations(unknowns::Vector{Float64}, constants::Constants, a₁::Float6
 	
 end
 
-function bifurcation(initial_guess::Vector{Float64}, a1Vals::Vector{Float64}, branchN::Int64, constants::Constants; tol = 1e-8, solver = :NewtonRaphson, max_iter = 1000)
+function bifurcation(initial_guess::Matrix{Float64}, a1Vals::Vector{Float64}, branchN::Int64, constants::Constants; tol = 1e-8, solver = :NewtonRaphson, max_iter = 1000)
 
 	## compute the bifurcation branch for branchN branch points and provided a₁ values, starting at the given intial guess
 
