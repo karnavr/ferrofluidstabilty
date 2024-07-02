@@ -1,7 +1,7 @@
 %% Testing fourierSeries()
 
-% Define the coefficients for a simple cosine function
-coefficients = [0; 1];  % This corresponds to cos(x)
+% Coefficients for cosine
+coefficients = [0; 1]; 
 
 % Define the domain
 domain = linspace(-pi, pi, 100);
@@ -32,8 +32,5 @@ title('Second Derivative: S''''(x)');
 xlabel('x');
 ylabel('S''''(x)');
 grid on;
-
-%% 
-
 
 

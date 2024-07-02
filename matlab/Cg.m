@@ -16,6 +16,7 @@ function C = Cg(N, z, S0, b, mu)
 
             % Define integrand specific to matrix
             term = - (j + mu) .* S0 .* beta0;
+            term = term ./ max(term);
 
             trap = trapz(z, term .* exp(-1i * (m - j) * z));
 
