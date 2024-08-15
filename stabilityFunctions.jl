@@ -56,6 +56,14 @@ function solveGenEig(solution, Nmodes, Nmu; largest = false)
 		
 			lhs = [A B; C D]
 			rhs = [E F; G H]
+
+			# check condition number of each side and print if it's bad
+			# if cond(lhs) > 1e2
+			# 	println("Condition number of lhs is $(cond(lhs))")
+			# end
+			# if cond(rhs) > 1e2
+			# 	println("Condition number of rhs is $(cond(rhs))")
+			# end
 			
 			# solve problem 
 			solution, ϕ	= eigs(rhs, lhs, nev = 1, which = :LR)
@@ -85,6 +93,14 @@ function solveGenEig(solution, Nmodes, Nmu; largest = false)
 		
 			lhs = [A B; C D]
 			rhs = [E F; G H]
+
+			# check condition number of each side and print if it's bad
+			# if cond(lhs) > 1e2
+			# 	println("Condition number of lhs is $(cond(lhs))")
+			# end
+			# if cond(rhs) > 1e2
+			# 	println("Condition number of rhs is $(cond(rhs))")
+			# end
 			
 			# solve problem 
 			solutions = eigen(rhs, lhs)
