@@ -249,9 +249,17 @@ function equations(unknowns::Vector{Float64}, constants::Constants, a₁::Float6
 	
 end
 
-function bifurcation(initial_guess::Matrix{Float64}, a1Vals::Vector{Float64}, branchN::Int64, constants::Constants; tol = 1e-8, solver = :NewtonRaphson, max_iter = 1000)
+function bifurcation(initial_guess::Matrix{Float64}, a1Vals, branchN::Int64, constants::Constants; tol = 1e-8, solver = :NewtonRaphson, max_iter = 1000)
 
 	## compute the bifurcation branch for branchN branch points and provided a₁ values, starting at the given intial guess
+
+	# check type of the a1Vals argument 
+	if typeof(a1Vals) != Vector{Float64}
+
+		# create a vector of length branchN starting from 0.001 with stepsize a1Vals
+		a1Vals = collect(range(0.001, step = a1Vals, length = branchN + 1))
+
+	end
 
 	# create base file name (num_modes).(tolerance).(branchN).(solver).(max_iter)
 	base_name = "$(constants.N).$(tol).$(branchN).$(solver)"
