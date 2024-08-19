@@ -322,6 +322,42 @@ function Kapprox(v, z, nterms)
     return leading_term .* sum_terms
 end
 
+function blockWiseInverse(M, version = :general)
+	# invert a matrix block-wise using the explicit formula
+
+	# unpack matrix
+	A = M[1]
+	B = M[2]
+	C = M[3]
+	D = M[4]
+
+	# calculate required inverses
+	Ainv = inv(A)
+
+	# calculate the inverse of the full matrix
+	if version == :general
+		DCABinv = inv(D - C * Ainv * B)
+
+		# General formula
+		Minv = [hcat(Ainv + Ainv * B * DCABinv * C * Ainv, -Ainv * B * DCABinv);
+			hcat(-DCABinv * C * Ainv, DCABinv)]
+
+	elseif version == :ourproblem
+		CABinv = inv(C * Ainv * B)
+
+		# Assuming D = 0 
+		Minv = [hcat(Ainv + Ainv * B * CABinv * C * Ainv, -Ainv * B * CABinv);
+			hcat(-CABinv * C * Ainv, CABinv)]
+
+	else
+		error("Declare a valid problem type. Options are :general or :ourproblem")
+
+	end
+
+	return Minv
+
+end
+
 ## Matrices
 
 # LOCAL 
