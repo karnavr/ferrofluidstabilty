@@ -118,6 +118,69 @@ function solveGenEig(solution, Nmodes, Nmu; largest = false)
 	return λ
 end
 
+function solveStandardEig(solution, Nmodes, Nmu)
+
+	# constants
+	Bond = 1.5
+	b = 0.1
+	ϵ = 1 - Bond/2
+	N = Nmodes
+	
+	# un-pack solution 
+	coeffs = solution[2:end]
+	c = solution[1]
+	
+	# create domain and convert to real space
+	z = collect(range(-π,+π,100))
+	S0, S0z, S0zz = fourierSeries(coeffs, z, π)
+
+	# commonly used constants
+	S0sq = 1 .+ S0z.^2
+	κ = - (S0zz./(S0sq.^(3/2))) .+ (1 ./ (S0.*S0sq.^(1/2)))
+	q0z = c .+ (1 ./ S0) .* sqrt.(S0sq .* ( (c^2 + 2 .* ϵ .- 2 .* κ).*(S0.^2) .+ Bond))
+
+	# set up stability stuff
+	μ = collect(range(0.001,1.0,Nmu))
+
+	# create matrices that stay constant (don't depend on μ)
+	A = Ag(N, z, S0z, q0z, c)
+	B = Bg(N, z)
+	D = zeros(2N+1,2N+1)
+
+	λ = zeros(ComplexF64, 4*N+2, length(μ))
+
+	Threads.@threads for i = 1:Nmu
+
+		# create matrices
+		E = Eg(N, z, S0, S0z, S0zz, q0z, c, Bond, μ[i])
+		F = Fg(N, z, S0, S0z, q0z, c, μ[i])
+	
+		C = Cg(N, z, S0, b, μ[i])
+		G = Gg(N, z, S0, S0z, q0z, b, c, μ[i])
+		H = Hg(N, z, S0, b, μ[i])
+	
+		# L1 = [A B; C D]
+		L2 = [E F; G H]
+
+		# compute the S matrix
+		L1inv = blockWiseInverse([A, B, C, D], :ourproblem)
+		S = L1inv * L2
+		
+		# solve problem 
+		solutions = eigvals(S)
+		
+		# save solution
+		λ[:,i] = (solutions.values)
+	
+	end
+
+	# save solution to csv file
+	# writedlm("stabilitySolutions/$(Nmu).$(Nmodes).stabSol.csv", λ, ',')
+
+	return λ
+
+end
+
 function stabilityPlots(λ, Nmu)
 
 	μ = collect(range(0.001,1.0,Nmu))
@@ -158,7 +221,6 @@ function max_real_kernel(λ, maxrealλ, Nmu)
     end
     return
 end
-
 
 function stabilityPlotsGPU(λ, Nmu)
     # Transfer the λ array to the GPU
