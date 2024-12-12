@@ -567,7 +567,8 @@ function Cg(N, z, S0, b, μ)
 			β1 = β(1, k, b, S0)
 
 			# define integrand specifc to matrix
-			term = - (j .+ μ) .* S0 .* β0
+			# term = - (j .+ μ) .* S0 .* β0
+			term = - (j .+ μ) .* S0 
 			
 			# populate matrix entries
 			C[jj,mm] =  1/(2*π) .* trapz(z,term .* exp.(- im .* (m - j).* z))
@@ -598,8 +599,15 @@ function Gg(N, z, S0, S0z, q0z, b, c, μ)
 			β0 = β(0, k, b, S0)
 			β1 = β(1, k, b, S0)
 
+			beta_ratio = (-k .* c0(k, b, 1.5)) ./ (k^2 - 1 + 1.5);
+
 			# define integrand specifc to matrix
 			term = S0.*S0z.*c .* k.^2 .* β1 .- S0z.*c.*k.*β0 .+ im.*S0.*q0z.* k.^2 .* β0 .- im.*S0.*c.* k .* (μ .+ m) .* β0
+
+			term = S0 .* S0z .* c .* k.^2 .* beta_ratio ...
+                 - S0z .* c .* k ...
+                 + 1i .* S0 .* q0z .* k.^2 ...
+                 - 1i .* S0 .* c .* k .* (mu + m);
 			
 			# populate matrix entries
 			G[jj,mm] =  1/(2*π) .* trapz(z,term .* exp.(- im .* (m - j).* z))
